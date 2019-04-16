@@ -1,0 +1,26 @@
+{
+  "name": "mongo-adapter",
+  "version": "1.0.0",
+  "description": "Cloudboost MongoDB adapter",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/CloudBoost/mongo-adapter.git"
+  },
+  "author": "HackerBay Inc",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/CloudBoost/mongo-adapter/issues"
+  },
+  "homepage": "https://github.com/CloudBoost/mongo-adapter#readme",
+  "dependencies": {
+    "gridfs-stream": "^1.1.1",
+    "mongodb": "^3.2.3",
+    "q": "^1.5.1",
+    "underscore": "^1.9.1",
+    "winston": "^3.2.1"
+  }
+}
