@@ -13,20 +13,16 @@ const Grid = require('gridfs-stream');
 const winston = require('winston');
 
 const mongodb = require('mongodb');
-const config = require('../config/config');
+const connector = require('./connector');
+const util = require('./util')
 
-const mongoUtil = require('../helpers/mongo');
-
-const obj = {};
-
-obj.document = {
+const document = {
 
   get(appId, collectionName, documentId, accessList, isMasterKey) { // returns the document that matches the _id with the documentId
-    const _self = obj;
-
     const deferred = q.defer();
+
     try {
-      _self.document.findOne(appId, collectionName, {
+      document.findOne(appId, collectionName, {
         _id: documentId,
       }, null, null, null, accessList, isMasterKey).then((doc) => {
         deferred.resolve(doc);
@@ -46,7 +42,6 @@ obj.document = {
 
   _include(appId, include, docs) {
     // This function is for joins. :)
-    const _self = obj;
     const join = [];
     const deferred = q.defer();
     try {
@@ -97,7 +92,7 @@ obj.document = {
         const qry = {};
         qry._id = {};
         qry._id.$in = idList;
-        promises.push(_self.document.fetch_data(appId, collectionName, qry));
+        promises.push(document.fetch_data(appId, collectionName, qry));
         // }
       }
 
@@ -118,7 +113,7 @@ obj.document = {
             }
           }
           if (rInclude.length > 0) {
-            pr.push(_self.document._include(appId, rInclude, arrayOfDocs[i]));
+            pr.push(document._include(appId, rInclude, arrayOfDocs[i]));
           } else {
             const newPromise = q.defer();
             newPromise.resolve(arrayOfDocs[i]);
@@ -187,7 +182,7 @@ obj.document = {
     const includeDeferred = q.defer();
 
     try {
-      if (config.mongoDisconnected) {
+      if (connector.connected === false) {
         includeDeferred.reject('Database Not Connected');
         return includeDeferred.promise;
       }
@@ -197,7 +192,7 @@ obj.document = {
         return includeDeferred.promise;
       }
 
-      config.mongoClient.db(appId).collection(mongoUtil.collection.getId(appId, collectionName)).find(qry).toArray((err, includeDocs) => {
+      connector.client.db(appId).collection(util.collection.getId(appId, collectionName)).find(qry).toArray((err, includeDocs) => {
         if (err) {
           winston.log('error', err);
           includeDeferred.reject(err);
@@ -218,12 +213,12 @@ obj.document = {
   find(appId, collectionName, query, select, sort, limit, skip, accessList, isMasterKey) {
     const deferred = q.defer();
     try {
-      if (config.mongoDisconnected) {
+      if (connector.connected === false) {
         deferred.reject('Database Not Connected');
         return deferred.promise;
       }
 
-      const collection = config.mongoClient.db(appId).collection(mongoUtil.collection.getId(appId, collectionName));
+      const collection = connector.client.db(appId).collection(util.collection.getId(appId, collectionName));
       let include = [];
       /* query for expires */
 
@@ -386,7 +381,7 @@ obj.document = {
     const mainPromise = q.defer();
 
     try {
-      if (config.mongoDisconnected) {
+      if (connector.connected === false) {
         mainPromise.reject('Database Not Connected');
         return mainPromise.promise;
       }
@@ -418,7 +413,7 @@ obj.document = {
     const deferred = q.defer();
 
     try {
-      if (config.mongoDisconnected) {
+      if (connector.connected === false) {
         deferred.reject('Database Not Connected');
         return deferred.promise;
       }
@@ -448,13 +443,13 @@ obj.document = {
     const deferred = q.defer();
 
     try {
-      if (config.mongoDisconnected) {
+      if (connector.connected === false) {
         deferred.reject('Database Not Connected');
         return deferred.promise;
       }
 
 
-      const collection = config.mongoClient.db(appId).collection(mongoUtil.collection.getId(appId, collectionName));
+      const collection = connector.client.db(appId).collection(util.collection.getId(appId, collectionName));
 
 
       const documentId = document._id;
@@ -487,7 +482,7 @@ obj.document = {
     const deferred = q.defer();
 
     try {
-      if (config.mongoDisconnected) {
+      if (connector.connected === false) {
         deferred.reject('Database Not Connected');
         return deferred.promise;
       }
@@ -496,7 +491,7 @@ obj.document = {
         skip = parseInt(skip, 10);
       }
 
-      const collection = config.mongoClient.db(appId).collection(mongoUtil.collection.getId(appId, collectionName));
+      const collection = connector.client.db(appId).collection(util.collection.getId(appId, collectionName));
 
       // delete $include and $includeList recursively
       query = _sanitizeQuery(query);
@@ -528,12 +523,12 @@ obj.document = {
     const deferred = q.defer();
 
     try {
-      if (config.mongoDisconnected) {
+      if (connector.connected === false) {
         deferred.reject('Database Not Connected');
         return deferred.promise;
       }
 
-      const collection = config.mongoClient.db(appId).collection(mongoUtil.collection.getId(appId, collectionName));
+      const collection = connector.client.db(appId).collection(util.collection.getId(appId, collectionName));
 
       let include = [];
 
@@ -643,12 +638,12 @@ obj.document = {
     const deferred = q.defer();
 
     try {
-      if (config.mongoDisconnected) {
+      if (connector.connected === false) {
         deferred.reject('Database Not Connected');
         return deferred.promise;
       }
 
-      const collection = config.mongoClient.db(appId).collection(mongoUtil.collection.getId(appId, collectionName));
+      const collection = connector.client.db(appId).collection(util.collection.getId(appId, collectionName));
 
       let query = {};
       if (pipeline.length > 0 && pipeline[0] && pipeline[0].$match) {
@@ -737,12 +732,12 @@ obj.document = {
     const deferred = q.defer();
 
     try {
-      if (config.mongoDisconnected) {
+      if (connector.connected === false) {
         deferred.reject('Database Not Connected');
         return deferred.promise;
       }
 
-      const collection = config.mongoClient.db(appId).collection(mongoUtil.collection.getId(appId, collectionName));
+      const collection = connector.client.db(appId).collection(util.collection.getId(appId, collectionName));
 
       collection.save(document, (err, doc) => {
         if (err) {
@@ -772,7 +767,7 @@ obj.document = {
     const deferred = q.defer();
 
     try {
-      if (config.mongoDisconnected) {
+      if (connector.connected === false) {
         deferred.reject('Database Not Connected');
         return deferred.promise;
       }
@@ -780,7 +775,7 @@ obj.document = {
       if (!document._id) {
         deferred.reject('You cant delete an unsaved object');
       } else {
-        const collection = config.mongoClient.db(appId).collection(mongoUtil.collection.getId(appId, collectionName));
+        const collection = connector.client.db(appId).collection(util.collection.getId(appId, collectionName));
         const query = {
           _id: documentId,
         };
@@ -823,12 +818,12 @@ obj.document = {
     const deferred = q.defer();
 
     try {
-      if (config.mongoDisconnected) {
+      if (connector.connected === false) {
         deferred.reject('Database Not Connected');
         return deferred.promise;
       }
 
-      const collection = config.mongoClient.db(appId).collection(mongoUtil.collection.getId(appId, collectionName));
+      const collection = connector.client.db(appId).collection(util.collection.getId(appId, collectionName));
 
       collection.remove(query, {
         w: 1, // returns the number of documents removed
@@ -861,7 +856,7 @@ obj.document = {
     const deferred = q.defer();
 
     try {
-      config.mongoClient.db(appId).collection('fs.files').findOne({
+      connector.client.db(appId).collection('fs.files').findOne({
         filename,
       }, (err, file) => {
         if (err) {
@@ -888,7 +883,7 @@ obj.document = {
     */
   getFileStreamById(appId, fileId) {
     try {
-      const gfs = Grid(config.mongoClient.db(appId), mongodb);
+      const gfs = Grid(connector.client.db(appId), mongodb);
       const readstream = gfs.createReadStream({ _id: fileId });
       return readstream;
     } catch (err) {
@@ -908,12 +903,12 @@ obj.document = {
   async deleteFileFromGridFs(appId, filename) {
     const deferred = q.defer();
     try {
-      const found = await config.mongoClient.db(appId).collection('fs.files').findOne({
+      const found = await connector.client.db(appId).collection('fs.files').findOne({
         filename,
       });
       if (found) {
         const id = found._id;
-        config.mongoClient.db(appId).collection('fs').deleteMany({
+        connector.client.db(appId).collection('fs').deleteMany({
           _id: id,
         }, (err) => {
           if (err) {
@@ -947,7 +942,7 @@ obj.document = {
   saveFileStream(appId, fileStream, fileName, contentType) {
     const deferred = q.defer();
     try {
-      const bucket = new mongodb.GridFSBucket(config.mongoClient.db(appId));
+      const bucket = new mongodb.GridFSBucket(connector.client.db(appId));
       const writeStream = bucket.openUploadStream(fileName, {
         contentType,
         w: 1,
@@ -973,7 +968,7 @@ obj.document = {
   /** ********************END OF GRIDFS FILES************************************************************** */
 };
 
-module.exports = obj;
+module.exports = document;
 
 /* Private functions */
 

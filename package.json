@@ -2,7 +2,7 @@
   "name": "mongo-adapter",
   "version": "1.0.0",
   "description": "Cloudboost MongoDB adapter",
-  "main": "index.js",
+  "main": "src/adapter.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
@@ -17,6 +17,7 @@
   },
   "homepage": "https://github.com/CloudBoost/mongo-adapter#readme",
   "dependencies": {
+    "connection-string-parser": "^1.0.2",
     "gridfs-stream": "^1.1.1",
     "mongodb": "^3.2.3",
     "q": "^1.5.1",

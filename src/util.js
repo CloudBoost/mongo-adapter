@@ -7,14 +7,15 @@
 const { Db } = require('mongodb');
 const q = require('q');
 const winston = require('winston');
-const config = require('../config/config');
+const connector = require('./connector');
+
 // Private Functions
 function _dropIndex(appId, collectionName, indexString) {
   const deferred = q.defer();
 
   try {
     if (indexString && indexString !== '') {
-      const collection = config.mongoClient.db(appId).collection(collectionName);
+      const collection = connector.client.db(appId).collection(collectionName);
       collection.dropIndex(indexString, (err, result) => {
         if (err && err.message && err.message !== 'ns not found') {
           winston.log('error', err);
@@ -43,7 +44,7 @@ function _unsetColumn(appId, collectionName, query) {
 
   try {
     if (query && Object.keys(query).length > 0) {
-      const collection = config.mongoClient.db(appId).collection(collectionName);
+      const collection = connector.client.db(appId).collection(collectionName);
       collection.update({}, {
         $unset: query,
       }, {
@@ -80,7 +81,7 @@ mongoService.app = {
     try {
       const _self = mongoService;
 
-      if (config.mongoDisconnected) {
+      if (connector.connected === false) {
         deferred.reject('Database Not Connected');
         return deferred.promise;
       }
@@ -105,13 +106,13 @@ mongoService.app = {
     const deferred = q.defer();
 
     try {
-      if (config.mongoDisconnected) {
+      if (connector.connected === false) {
         deferred.reject('Error : Storage is not connected.');
         return deferred.promise;
       }
 
       // eslint-disable-next-line global-require
-      const replSet = require('../database-connect/mongoConnect.js').replSet();
+      const replSet = connector.replSet();
 
       const db = new Db(appId, replSet, { w: 1 });
 
@@ -140,11 +141,11 @@ mongoService.document = {
     const deferred = q.defer();
 
     try {
-      if (config.mongoDisconnected || !global.database) {
+      if (connector.connected === false || !global.database) {
         throw 'Database Not Connected';
       }
 
-      const collection = config.mongoClient.db(appId).collection(_self.collection.getId(appId, collectionName));
+      const collection = connector.client.db(appId).collection(_self.collection.getId(appId, collectionName));
       const findQuery = collection.find();
 
       findQuery.toArray((err, docs) => {
@@ -175,12 +176,12 @@ mongoService.database = {
     const deferred = q.defer();
 
     try {
-      if (config.mongoDisconnected) {
+      if (connector.connected === false) {
         deferred.reject('Database Not Connected');
         return deferred.promise;
       }
 
-      const database = config.mongoClient.db(appId);
+      const database = connector.client.db(appId);
 
       database.dropDatabase((err) => {
         if (err) {
@@ -209,7 +210,7 @@ mongoService.collection = {
     const deferred = q.defer();
 
     try {
-      if (config.mongoDisconnected) {
+      if (connector.connected === false) {
         throw 'Database Not Connected';
       }
 
@@ -238,7 +239,7 @@ mongoService.collection = {
     const deferred = q.defer();
 
     try {
-      if (config.mongoDisconnected) {
+      if (connector.connected === false) {
         deferred.reject('Database Not Connected');
         return deferred.promise;
       }
@@ -273,7 +274,7 @@ mongoService.collection = {
     const deferred = q.defer();
 
     try {
-      if (config.mongoDisconnected) {
+      if (connector.connected === false) {
         deferred.reject('Database Not Connected');
         return deferred.promise;
       }
@@ -290,7 +291,7 @@ mongoService.collection = {
       }
 
       if (Object.keys(obj).length > 0) {
-        const collection = config.mongoClient.db(appId).collection(mongoService.collection.getId(appId, collectionName));
+        const collection = connector.client.db(appId).collection(mongoService.collection.getId(appId, collectionName));
         collection.createIndex(obj, (err, res) => {
           if (err) {
             deferred.reject(err);
@@ -315,14 +316,14 @@ mongoService.collection = {
     const deferred = q.defer();
 
     try {
-      if (config.mongoDisconnected) {
+      if (connector.connected === false) {
         deferred.reject('Database Not Connected');
         return deferred.promise;
       }
       /**
                 Creating a wild card index , instaed of creating individual $text index on each column seperately
             * */
-      const collection = config.mongoClient.db(appId).collection(mongoService.collection.getId(appId, collectionName));
+      const collection = connector.client.db(appId).collection(mongoService.collection.getId(appId, collectionName));
       collection.createIndex({
         '$**': 'text',
       }, (err, res) => {
@@ -348,12 +349,12 @@ mongoService.collection = {
     const deferred = q.defer();
 
     try {
-      if (config.mongoDisconnected) {
+      if (connector.connected === false) {
         deferred.reject('Database Not Connected');
         return deferred.promise;
       }
 
-      const collection = config.mongoClient.db(appId).collection(mongoService.collection.getId(appId, collectionName));
+      const collection = connector.client.db(appId).collection(mongoService.collection.getId(appId, collectionName));
       collection.indexInformation((err, res) => {
         if (err) {
           deferred.resolve(null);
@@ -376,7 +377,7 @@ mongoService.collection = {
     try {
       const _self = mongoService;
 
-      const collection = config.mongoClient.db(appId).collection(_self.collection.getId(appId, collectionName));
+      const collection = connector.client.db(appId).collection(_self.collection.getId(appId, collectionName));
 
       const query = {};
 
@@ -411,7 +412,7 @@ mongoService.collection = {
     const deferred = q.defer();
 
     try {
-      if (config.mongoDisconnected) {
+      if (connector.connected === false) {
         deferred.reject('Database Not Connected');
         return deferred.promise;
       }
@@ -467,12 +468,12 @@ mongoService.collection = {
     const deferred = q.defer();
 
     try {
-      if (config.mongoDisconnected) {
+      if (connector.connected === false) {
         throw 'Database Not Connected';
       }
       const _self = mongoService;
 
-      const collection = config.mongoClient.db(appId).collection(_self.collection.getId(appId, collectionName));
+      const collection = connector.client.db(appId).collection(_self.collection.getId(appId, collectionName));
 
       collection.drop((err, reply) => {
         if (err) {
@@ -504,7 +505,7 @@ mongoService.collection = {
     try {
       const _self = mongoService;
 
-      const collection = config.mongoClient.db(appId).collection(_self.collection.getId(appId, oldCollectionName));
+      const collection = connector.client.db(appId).collection(_self.collection.getId(appId, oldCollectionName));
 
       collection.rename(_self.collection.getId(appId, newCollectionName), (err, _collection) => {
         if (err) {
@@ -545,7 +546,7 @@ mongoService.collection = {
     const deferred = q.defer();
 
     try {
-      const collection = config.mongoClient.db(appId).collection('_Schema');
+      const collection = connector.client.db(appId).collection('_Schema');
       const findQuery = collection.find({});
       findQuery.toArray((err, res) => {
         if (err) {
