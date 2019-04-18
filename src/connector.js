@@ -15,7 +15,7 @@ class connector {
 
   connectionString = '';
 
-  static connect  ({ connectionString }) => {
+  static connect = async ({ connectionString }) => {
     try {
       const dbClient = await MongoClient.connect(connectionString, {
         poolSize: 200,
@@ -30,7 +30,7 @@ class connector {
     } catch (error) {
       throw error;
     }
-  },
+  }
 
   replSet(configs) {
     try {
@@ -58,16 +58,16 @@ class connector {
         }
       );
     }
-  },
+  }
 
-  disconnect: () => {
+  disconnect = () => {
     if (this.connected) {
       this.client.close();
       this.connected = false;
     } else {
       throw new DatabaseConnectionError();
     }
-  },
+  }
 }
 
 module.exports = connector;
