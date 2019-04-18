@@ -1,20 +1,21 @@
 const winston = require('winston');
 const { ConnectionStringParser } = require('connection-string-parser')
 const { ReplSet, Server, MongoClient } = require('mongodb');
+const { DatabaseConnectionError } = require('./errors');
 
 const connectionStringParser = new ConnectionStringParser({
   scheme: "mongodb",
   hosts: []
 });
 
-const connector = {
-  client: null,
+class connector {
+  client = null;
 
-  connected: false,
+  connected = false;
 
-  connectionString: '',
+  connectionString = '';
 
-  connect: async (connectionString) => {
+  static connect  ({ connectionString }) => {
     try {
       const dbClient = await MongoClient.connect(connectionString, {
         poolSize: 200,
@@ -27,16 +28,8 @@ const connector = {
 
       return dbClient
     } catch (error) {
-      winston.log('error', error)
+      throw error;
     }
-  },
-
-  dbConnect: (appId) => {
-    if (this.connected) {
-      return this.client.db(appId)
-    }
-
-    throw new Error('Database not connected');
   },
 
   replSet(configs) {
@@ -55,7 +48,7 @@ const connector = {
 
       return new ReplSet(connectionObject.hosts);
 
-      
+
     } catch (error) {
       winston.log(
         'error',
@@ -67,12 +60,12 @@ const connector = {
     }
   },
 
-  close: () => {
+  disconnect: () => {
     if (this.connected) {
       this.client.close();
       this.connected = false;
     } else {
-      throw new Error('Database not connected');
+      throw new DatabaseConnectionError();
     }
   },
 }
