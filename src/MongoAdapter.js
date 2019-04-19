@@ -4,10 +4,6 @@ import mongoUtil from './util';
 import errors from './errors';
 
 const { ReplSet, Server, MongoClient } = mongodb;
-const connectionStringParser = new ConnectionStringParser({
-  scheme: "mongodb",
-  hosts: []
-});
 
 class MongoAdapter {
   /**
@@ -36,6 +32,10 @@ class MongoAdapter {
 
   constructor (credentials) {
     this.credentials = credentials
+    this.connectionStringParser = new ConnectionStringParser({
+      scheme: "mongodb",
+      hosts: []
+    });
   }
 
   /**
@@ -47,19 +47,17 @@ class MongoAdapter {
    * @returns {Promise<Object>} dbClient
    */
   connect = async ({ connectionString }) => {
-    const dbClient = await MongoClient.connect(connectionString, {
+    this.client = await MongoClient.connect(connectionString, {
       poolSize: 200,
       useNewUrlParser: true,
     });
-
-    this.client = dbClient;
     this.connected = true;
     this.connectionString = connectionString;
 
-    return dbClient;
+    return this.client;
   }
 
-  replSet (configs) {
+  replSet = (configs) => {
     if (Array.isArray(configs) && configs.length > 0) {
       const servers = configs.map(config => {
         return new Server(config.host, parseInt(mongoConfig.port, 10))
@@ -70,10 +68,12 @@ class MongoAdapter {
       return replSet;
     }
 
-    const connectionObject = connectionStringParser.parse(this.credentials.connectionString);
+    const connectionObject = this.connectionStringParser
+      .parse(this.credentials.connectionString);
 
     return new ReplSet(connectionObject.hosts);
   }
+
 
   /**
    * Disconnects current MongoDB connection or throws an error
@@ -83,7 +83,7 @@ class MongoAdapter {
    *
    * @returns {void}
    */
-  disconnect () {
+  disconnect = () => {
     if (this.connected) {
       this.client.close();
       this.connected = false;
@@ -253,7 +253,7 @@ class MongoAdapter {
           }
         }
 
-        const deserializedDocs = _deserialize(currentDocs);
+        const deserializedDocs = this._deserialize(currentDocs);
 
         return deserializedDocs;
       });
@@ -277,18 +277,10 @@ class MongoAdapter {
       return [];
     }
 
-    return new Promise((resolve, reject) => {
-      this.client.db(appId)
-        .collection(util.collection.getId(appId, collectionName))
-        .find(qry)
-        .toArray((err, includeDocs) => {
-          if (err) {
-            return reject(err);
-          }
-
-          return resolve(includeDocs);
-        });
-    })
+    return this.client.db(appId)
+      .collection(collectionName)
+      .find(qry)
+      .toArray();
   }
 
   /**
@@ -321,7 +313,7 @@ class MongoAdapter {
 
     const collection = this.client
       .db(appId)
-      .collection(util.collection.getId(appId, collectionName));
+      .collection(collectionName);
 
     let include = [];
     /* query for expires */
@@ -461,15 +453,15 @@ class MongoAdapter {
 
     findQuery = findQuery.limit(limit);
 
-    return findQuery.toArray().then((docs) => {
-      if (!include || include.length === 0) {
-        docs = _deserialize(docs);
+    const documents = await findQuery.toArray();
 
-        return docs;
-      }
+    if (!include || include.length === 0) {
+      const deserializedDocuments = this._deserialize(documents);
 
-      return this._include(appId, include, docs)
-    });
+      return deserializedDocuments;
+    }
+
+    return this._include({ appId, include, docs })
   }
 
   /**
@@ -558,7 +550,7 @@ class MongoAdapter {
 
     const collection = this.client
       .db(appId)
-      .collection(util.collection.getId(appId, collectionName));
+      .collection(collectionName);
 
 
     const documentId = document._id;
@@ -594,7 +586,7 @@ class MongoAdapter {
     }
 
     const collection = this.client.db(appId)
-      .collection(util.collection.getId(appId, collectionName));
+      .collection(collectionName);
 
     // delete $include and $includeList recursively
     const cleanQuery = this._sanitizeQuery(query);
@@ -636,7 +628,7 @@ class MongoAdapter {
     }
 
     const collection = this.client.db(appId)
-      .collection(util.collection.getId(appId, collectionName));
+      .collection(collectionName);
 
     let include = [];
 
@@ -705,7 +697,7 @@ class MongoAdapter {
     const cursor = await collection.aggregate(pipeline);
     const documents = await cursor.toArray();
     const includedDocuments = this._include(appId, include, documents);
-    const deserializedDocuments = _deserialize(includedDocuments);
+    const deserializedDocuments = this._deserialize(includedDocuments);
 
     return deserializedDocuments;
   }
@@ -737,7 +729,7 @@ class MongoAdapter {
     }
 
     const collection = this.client.db(appId)
-      .collection(mongoUtil.collection.getId(appId, collectionName));
+      .collection(collectionName);
 
     let query = {};
     if (pipeline.length > 0 && pipeline[0] && pipeline[0].$match) {
@@ -822,10 +814,9 @@ class MongoAdapter {
       throw new errors.DatabaseConnectionError();
     }
 
-    const collection = this.client.db(appId)
-      .collection(mongoUtil.collection.getId(appId, collectionName));
-
-    return collection.save(document);
+    return this.client.db(appId)
+      .collection(collectionName)
+      .save(document);
   }
 
   /**
@@ -849,7 +840,7 @@ class MongoAdapter {
     }
 
     const collection = this.client.db(appId)
-      .collection(mongoUtil.collection.getId(appId, collectionName));
+      .collection(collectionName);
 
     const query = {
       _id: documentId,
@@ -881,7 +872,7 @@ class MongoAdapter {
     }
 
     const collection = this.client.db(appId)
-      .collection(mongoUtil.collection.getId(appId, collectionName));
+      .collection(collectionName);
 
     const doc = await collection.remove(query, {
       w: 1, // returns the number of documents removed
@@ -954,7 +945,7 @@ class MongoAdapter {
 
     if (document) {
       const id = document._id;
-      return config.mongoClient.db(appId)
+      return this.client.db(appId)
         .collection('fs')
         .deleteMany({
           _id: id,
@@ -1177,6 +1168,356 @@ class MongoAdapter {
 
     return docs;
   }
+
+  /**
+   * @param {Object} details
+   * @param {string} details.appId
+   * @param {string} details.collectionName
+   * @param {string} details.indexString
+   *
+   * @returns {Promise<Object|undefined>}
+   */
+  _dropIndex = async ({ appId, collectionName, indexString }) => {
+    if (this.connected === false) {
+      throw new errors.DatabaseConnectionError();
+    }
+
+    if (indexString && indexString !== '') {
+      const collection = this.client.db(appId).collection(collectionName);
+
+      return collection.dropIndex(indexString);
+    }
+  }
+
+   /**
+   * @param {Object} details
+   * @param {string} details.appId
+   * @param {string} details.collectionName
+   * @param {Object} details.query
+   *
+   * @returns {Promise<Object|undefined>}
+   */
+  _unsetColumn = async ({ appId, collectionName, query }) => {
+    if (this.connected === false) {
+      throw new errors.DatabaseConnectionError();
+    }
+
+    if (query && Object.keys(query).length > 0) {
+      const collection = this.client.db(appId).collection(collectionName);
+
+      return collection.update({}, {
+        $unset: query,
+      }, {
+        multi: true,
+      });
+    }
+  }
+
+  /**
+   * This deletes the app database
+   *
+   * @param {string} appId
+   *
+   * @returns {Promise}
+   */
+  drop = async (appId) => {
+    if (this.connected === false) {
+      throw new errors.DatabaseConnectionError();
+    }
+
+    return this.dropDatabase(appId);
+  }
+
+  /**
+   * @param {string} appId
+   *
+   * @return {Promise<Object>} db
+   */
+  create = async (appId) => {
+    if (this.connected === false) {
+      throw new errors.DatabaseConnectionError();
+    }
+
+    const replSet = this.replSet();
+
+    const db = new Db(appId, replSet, { w: 1 });
+
+    return db;
+  }
+
+  /**
+   *
+   * @param {Object} details
+   * @param {string} details.appId
+   * @param {string} details.collectionName
+   *
+   * @returns {Promise}
+   */
+  getSearchableDocuments = ({ appId, collectionName }) => {
+    if (this.connected === false) {
+      throw new errors.DatabaseConnectionError();
+    }
+
+    const collection = this.client.db(appId)
+      .collection(collectionName);
+    const findQuery = collection.find();
+
+    return findQuery.toArray();
+  }
+
+  /**
+   * @param {string} appId
+   *
+   * @returns {Promise}
+   */
+  dropDatabase(appId) {
+    if (this.connected === false) {
+      throw new errors.DatabaseConnectionError();
+    }
+
+    const database = this.client.db(appId);
+
+    return database.dropDatabase();
+  }
+
+  /**
+   * @param {Object} details
+   * @param {string} details.appId
+   * @param {string} details.collectionName
+   * @param {Object} details.column
+   *
+   * @returns {Promise}
+   */
+  addColumn({ appId, collectionName, column }) {
+    if (this.connected === false) {
+      throw new errors.DatabaseConnectionError();
+    }
+
+    if (column.dataType === 'GeoPoint' || column.dataType === 'Text') {
+      return this.createIndex({
+        appId,
+        collectionName,
+        columnName: column.name,
+        columnType: column.dataType
+      });
+    }
+  }
+
+  /**
+   *
+   * @param {Object} details
+   * @param {string} details.appId
+   * @param {string} details.collectionName
+   * @param {Array} details.schema
+   *
+   * @returns {Promise}
+   */
+  createCollection = async ({ appId, collectionName, schemas }) => {
+    if (this.connected === false) {
+      throw new errors.DatabaseConnectionError();
+    }
+
+    for (let i = 0; i < schemas.length; i++) {
+      if (schemas[i].dataType === 'GeoPoint') {
+        await this.createIndex({
+          appId,
+          collectionName,
+          columnName: schemas[i].name,
+          columnType: schemas[i].dataType
+        });
+      }
+    }
+  }
+
+  /**
+   * @param {Object} details
+   * @param {string} details.appId
+   * @param {string} details.collectionName
+   * @param {string} details.columnType
+   *
+   * @returns {Promise}
+   */
+  createIndex = async ({
+    appId,
+    collectionName,
+    columnName,
+    columnType
+  }) => {
+    if (this.connected === false) {
+      throw new errors.DatabaseConnectionError();
+    }
+
+    const obj = {};
+
+    if (columnType === 'Text') {
+      obj['$**'] = 'text';
+    }
+
+    if (columnType === 'GeoPoint') {
+      obj[columnName] = '2dsphere';
+    }
+
+    if (Object.keys(obj).length > 0) {
+      return this.client.db(appId)
+        .collection(collectionName)
+        .createIndex(obj);
+    }
+  }
+
+  /**
+   * @param {Object} details
+   * @param {string} details.appId
+   * @param {string} details.collectionName
+   *
+   * @returns {Promise}
+   */
+  deleteAndCreateTextIndexes = async ({ appId, collectionName }) => {
+    if (connector.connected === false) {
+      throw new errors.DatabaseConnectionError();
+    }
+
+    return this.client.db(appId)
+      .collection(collectionName)
+      .createIndex({
+        '$**': 'text',
+      });
+  }
+
+  /**
+   * @param {Object} details
+   * @param {string} details.appId
+   * @param {string} details.collectionName
+   *
+   * @returns {Promise}
+   */
+  getIndexes = async ({ appId, collectionName }) => {
+    if (this.connected === false) {
+      throw new errors.DatabaseConnectionError();
+    }
+
+    return this.client.db(appId)
+      .collection(collectionName)
+      .indexInformation();
+  }
+
+
+  /**
+   * @param {Object} details
+   * @param {string} details.appId
+   * @param {string} details.collectionName
+   * @param {string} details.oldColumnName
+   * @param {string} details.newColumnName
+   *
+   * @return {Promise}
+   */
+  renameColumn = async ({
+    appId,
+    collectionName,
+    oldColumnName,
+    newColumnName
+  }) => {
+    if (this.connected === false) {
+      throw new errors.DatabaseConnectionError();
+    }
+    const collection = this.client.db(appId)
+      .collection(collectionName);
+
+    const query = {};
+
+    query[oldColumnName] = newColumnName;
+
+    return collection.update(
+      {},
+      {
+        $rename: query,
+      },
+      {
+        multi: true,
+      }
+    );
+  }
+
+  /**
+   * @param {Object} details
+   * @param {string} details.appId
+   * @param {string} details.collectionName
+   * @param {string} details.columnName
+   * @param {string} details.columnType
+   *
+   * @returns {Promise}
+   */
+  dropColumn = async ({
+    appId,
+    collectionName,
+    columnName,
+    columnType
+  }) => {
+    if (this.connected === false) {
+      throw new errors.DatabaseConnectionError();
+    }
+
+    const query = {};
+
+    query[columnName] = 1;
+
+    let indexName = null;
+
+    if (columnType === 'GeoPoint') {
+      indexName = `${columnName}_2dsphere`;
+    }
+
+    await this._dropIndex({ appId, collectionName, indexName });
+    await this._unsetColumn({ appId, collectionName, query });
+  }
+
+  /**
+   * @param {Object} details
+   * @param {string} details.appId
+   * @param {string} details.collectionName
+   *
+   * @returns {Promise}
+   */
+  dropCollection = async ({ appId, collectionName }) => {
+    if (this.connected === false) {
+      throw new errors.DatabaseConnectionError();
+    }
+
+    return this.client.db(appId)
+      .collection(collectionName)
+      .drop();
+  }
+
+  /**
+   * @param {Object} details
+   * @param {string} details.appId
+   * @param {string} details.oldCollectionName
+   * @param {string} details.newCollectionName
+   *
+   * @returns {Promise}
+   */
+  renameCollection = async ({
+    appId,
+    oldCollectionName,
+    newCollectionName
+  }) => {
+    return this.client.db(appId)
+      .collection(oldCollectionName)
+      .rename(newCollectionName);
+  }
+
+  /**
+   * @param {Object} details
+   * @param {string} details.appId
+   *
+   * @returns {Promise}
+   */
+  list = async (appId) => {
+    return this.client.db(appId)
+      .collection('_Schema')
+      .find({})
+      .toArray();
+  }
+
 }
 
 export default MongoAdapter;
