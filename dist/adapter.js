@@ -1,13 +1,15 @@
 "use strict";
 
-var connector = require('./connector');
+var _connector = _interopRequireDefault(require("./connector"));
 
-var document = require('./document');
+var _document = _interopRequireDefault(require("./document"));
 
-var util = require('./util');
+var _util = _interopRequireDefault(require("./util"));
+
+function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { "default": obj }; }
 
 module.exports = {
-  connector: connector,
-  document: document,
-  util: util
+  Connector: _connector["default"],
+  document: _document["default"],
+  util: _util["default"]
 };

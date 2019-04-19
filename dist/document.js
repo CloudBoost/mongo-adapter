@@ -1,5 +1,17 @@
 "use strict";
 
+var _q = _interopRequireDefault(require("q"));
+
+var _underscore = _interopRequireDefault(require("underscore"));
+
+var _gridfsStream = _interopRequireDefault(require("gridfs-stream"));
+
+var _winston = _interopRequireDefault(require("winston"));
+
+var _mongodb = _interopRequireDefault(require("mongodb"));
+
+function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { "default": obj }; }
+
 function asyncGeneratorStep(gen, resolve, reject, _next, _throw, key, arg) { try { var info = gen[key](arg); var value = info.value; } catch (error) { reject(error); return; } if (info.done) { resolve(value); } else { Promise.resolve(value).then(_next, _throw); } }
 
 function _asyncToGenerator(fn) { return function () { var self = this, args = arguments; return new Promise(function (resolve, reject) { var gen = fn.apply(self, args); function _next(value) { asyncGeneratorStep(gen, resolve, reject, _next, _throw, "next", value); } function _throw(err) { asyncGeneratorStep(gen, resolve, reject, _next, _throw, "throw", err); } _next(undefined); }); }; }
@@ -12,25 +24,6 @@ function _iterableToArrayLimit(arr, i) { var _arr = []; var _n = true; var _d = 
 
 function _arrayWithHoles(arr) { if (Array.isArray(arr)) return arr; }
 
-/* eslint-disable no-redeclare, no-undef */
-
-/*
-#     CloudBoost - Core Engine that powers Bakend as a Service
-#     (c) 2014 HackerBay, Inc.
-#     CloudBoost may be freely distributed under the Apache 2 License
-*/
-
-/* eslint no-use-before-define: 0, no-param-reassign: 0 */
-var q = require('q');
-
-var _ = require('underscore');
-
-var Grid = require('gridfs-stream');
-
-var winston = require('winston');
-
-var mongodb = require('mongodb');
-
 var connector = require('./connector');
 
 var util = require('./util');
@@ -38,7 +31,7 @@ var util = require('./util');
 var document = {
   get: function get(appId, collectionName, documentId, accessList, isMasterKey) {
     // returns the document that matches the _id with the documentId
-    var deferred = q.defer();
+    var deferred = _q["default"].defer();
 
     try {
       document.findOne(appId, collectionName, {
@@ -46,14 +39,16 @@ var document = {
       }, null, null, null, accessList, isMasterKey).then(function (doc) {
         deferred.resolve(doc);
       }, function (error) {
-        winston.log('error', error);
+        _winston["default"].log('error', error);
+
         deferred.reject(error);
       });
     } catch (err) {
-      winston.log('error', {
+      _winston["default"].log('error', {
         error: String(err),
         stack: new Error().stack
       });
+
       deferred.reject(err);
     }
 
@@ -62,7 +57,8 @@ var document = {
   _include: function _include(appId, include, docs) {
     // This function is for joins. :)
     var join = [];
-    var deferred = q.defer();
+
+    var deferred = _q["default"].defer();
 
     try {
       // include and merge all the documents.
@@ -88,7 +84,7 @@ var document = {
         var idList = [];
         var collectionName = null;
 
-        _.each(docs, function (doc) {
+        _underscore["default"].each(docs, function (doc) {
           if (doc[columnName] !== null) {
             // checks if the doc[columnName] is an list of relations or a relation
             if (Object.getPrototypeOf(doc[columnName]) === Object.prototype) {
@@ -130,7 +126,7 @@ var document = {
         _loop(i);
       }
 
-      q.all(promises).then(function (arrayOfDocs) {
+      _q["default"].all(promises).then(function (arrayOfDocs) {
         var pr = [];
         var rInclude = [];
 
@@ -153,13 +149,14 @@ var document = {
           if (rInclude.length > 0) {
             pr.push(document._include(appId, rInclude, arrayOfDocs[_i2]));
           } else {
-            var newPromise = q.defer();
+            var newPromise = _q["default"].defer();
+
             newPromise.resolve(arrayOfDocs[_i2]);
             pr.push(newPromise.promise);
           }
         }
 
-        q.all(pr).then(function (_arrayOfDocs) {
+        _q["default"].all(pr).then(function (_arrayOfDocs) {
           for (var _i3 = 0; _i3 < docs.length; _i3++) {
             for (var j = 0; j < join.length; j++) {
               // if the doc contains an relation with a columnName.
@@ -200,25 +197,28 @@ var document = {
           docs = _deserialize(docs);
           deferred.resolve(docs);
         }, function (error) {
-          winston.log('error', error);
+          _winston["default"].log('error', error);
+
           deferred.reject(error);
         });
       }, function (error) {
-        winston.log('error', error);
+        _winston["default"].log('error', error);
+
         deferred.reject();
       });
     } catch (err) {
-      winston.log('error', {
+      _winston["default"].log('error', {
         error: String(err),
         stack: new Error().stack
       });
+
       deferred.reject(err);
     }
 
     return deferred.promise;
   },
   fetch_data: function fetch_data(appId, collectionName, qry) {
-    var includeDeferred = q.defer();
+    var includeDeferred = _q["default"].defer();
 
     try {
       if (connector.connected === false) {
@@ -233,24 +233,26 @@ var document = {
 
       connector.client.db(appId).collection(util.collection.getId(appId, collectionName)).find(qry).toArray(function (err, includeDocs) {
         if (err) {
-          winston.log('error', err);
+          _winston["default"].log('error', err);
+
           includeDeferred.reject(err);
         } else {
           includeDeferred.resolve(includeDocs);
         }
       });
     } catch (err) {
-      winston.log('error', {
+      _winston["default"].log('error', {
         error: String(err),
         stack: new Error().stack
       });
+
       includeDeferred.reject(err);
     }
 
     return includeDeferred.promise;
   },
   find: function find(appId, collectionName, query, select, sort, limit, skip, accessList, isMasterKey) {
-    var deferred = q.defer();
+    var deferred = _q["default"].defer();
 
     try {
       if (connector.connected === false) {
@@ -402,17 +404,18 @@ var document = {
         }
       })["catch"](deferred.reject);
     } catch (err) {
-      winston.log('error', {
+      _winston["default"].log('error', {
         error: String(err),
         stack: new Error().stack
       });
+
       deferred.reject(err);
     }
 
     return deferred.promise;
   },
   findOne: function findOne(appId, collectionName, query, select, sort, skip, accessList, isMasterKey) {
-    var mainPromise = q.defer();
+    var mainPromise = _q["default"].defer();
 
     try {
       if (connector.connected === false) {
@@ -429,21 +432,23 @@ var document = {
           }
         }
       }, function (error) {
-        winston.log('error', error);
+        _winston["default"].log('error', error);
+
         mainPromise.reject(null);
       });
     } catch (err) {
-      winston.log('error', {
+      _winston["default"].log('error', {
         error: String(err),
         stack: new Error().stack
       });
+
       mainPromise.reject(err);
     }
 
     return mainPromise.promise;
   },
   save: function save(appId, documentArray) {
-    var deferred = q.defer();
+    var deferred = _q["default"].defer();
 
     try {
       if (connector.connected === false) {
@@ -457,24 +462,26 @@ var document = {
         promises.push(_save(appId, documentArray[_i4].document._tableName, documentArray[_i4].document));
       }
 
-      q.allSettled(promises).then(function (docs) {
+      _q["default"].allSettled(promises).then(function (docs) {
         deferred.resolve(docs);
       }, function (err) {
-        winston.log('error', err);
+        _winston["default"].log('error', err);
+
         deferred.reject(err);
       });
     } catch (err) {
-      winston.log('error', {
+      _winston["default"].log('error', {
         error: String(err),
         stack: new Error().stack
       });
+
       deferred.reject(err);
     }
 
     return deferred.promise;
   },
   _update: function _update(appId, collectionName, document) {
-    var deferred = q.defer();
+    var deferred = _q["default"].defer();
 
     try {
       if (connector.connected === false) {
@@ -492,24 +499,26 @@ var document = {
         upsert: true
       }, function (err, list) {
         if (err) {
-          winston.log('error', err);
+          _winston["default"].log('error', err);
+
           deferred.reject(err);
         } else if (list) {
           deferred.resolve(document);
         }
       });
     } catch (err) {
-      winston.log('error', {
+      _winston["default"].log('error', {
         error: String(err),
         stack: new Error().stack
       });
+
       deferred.reject(err);
     }
 
     return deferred.promise;
   },
   count: function count(appId, collectionName, query, limit, skip) {
-    var deferred = q.defer();
+    var deferred = _q["default"].defer();
 
     try {
       if (connector.connected === false) {
@@ -532,24 +541,26 @@ var document = {
 
       findQuery.count(query, function (err, count) {
         if (err) {
-          winston.log('error', err);
+          _winston["default"].log('error', err);
+
           deferred.reject(err);
         } else {
           deferred.resolve(count);
         }
       });
     } catch (err) {
-      winston.log('error', {
+      _winston["default"].log('error', {
         error: String(err),
         stack: new Error().stack
       });
+
       deferred.reject(err);
     }
 
     return deferred.promise;
   },
   distinct: function distinct(appId, collectionName, onKey, query, select, sort, limit, skip) {
-    var deferred = q.defer();
+    var deferred = _q["default"].defer();
 
     try {
       if (connector.connected === false) {
@@ -645,33 +656,36 @@ var document = {
               docs = _deserialize(docList);
               deferred.resolve(docs);
             }, function (error) {
-              winston.log('error', {
+              _winston["default"].log('error', {
                 error: String(error),
                 stack: new Error().stack
               });
+
               deferred.reject(error);
             });
           })["catch"](function (error) {
-            winston.log('error', {
+            _winston["default"].log('error', {
               error: String(error),
               stack: new Error().stack
             });
+
             deferred.reject(error);
           });
         }
       });
     } catch (err) {
-      winston.log('error', {
+      _winston["default"].log('error', {
         error: String(err),
         stack: new Error().stack
       });
+
       deferred.reject(err);
     }
 
     return deferred.promise;
   },
   aggregate: function aggregate(appId, collectionName, pipeline, limit, skip, accessList, isMasterKey) {
-    var deferred = q.defer();
+    var deferred = _q["default"].defer();
 
     try {
       if (connector.connected === false) {
@@ -753,17 +767,18 @@ var document = {
         }
       });
     } catch (err) {
-      winston.log('error', {
+      _winston["default"].log('error', {
         error: String(err),
         stack: new Error().stack
       });
+
       deferred.reject(err);
     }
 
     return deferred.promise;
   },
   _insert: function _insert(appId, collectionName, document) {
-    var deferred = q.defer();
+    var deferred = _q["default"].defer();
 
     try {
       if (connector.connected === false) {
@@ -774,7 +789,8 @@ var document = {
       var collection = connector.client.db(appId).collection(util.collection.getId(appId, collectionName));
       collection.save(document, function (err, doc) {
         if (err) {
-          winston.log('error', err);
+          _winston["default"].log('error', err);
+
           deferred.reject(err);
         } else {
           // elastic search code.
@@ -783,10 +799,11 @@ var document = {
         }
       });
     } catch (err) {
-      winston.log('error', {
+      _winston["default"].log('error', {
         error: String(err),
         stack: new Error().stack
       });
+
       deferred.reject(err);
     }
 
@@ -794,7 +811,8 @@ var document = {
   },
   "delete": function _delete(appId, collectionName, document) {
     var documentId = document._id;
-    var deferred = q.defer();
+
+    var deferred = _q["default"].defer();
 
     try {
       if (connector.connected === false) {
@@ -819,13 +837,16 @@ var document = {
                 code: 401,
                 message: 'You do not have permission to delete'
               };
-              winston.log('error', err);
+
+              _winston["default"].log('error', err);
+
               deferred.reject(err);
             }
           }
 
           if (err) {
-            winston.log('error', err);
+            _winston["default"].log('error', err);
+
             deferred.reject(err);
           } else if (doc.result.n !== 0) {
             deferred.resolve(doc.result);
@@ -838,17 +859,18 @@ var document = {
         });
       }
     } catch (err) {
-      winston.log('error', {
+      _winston["default"].log('error', {
         error: String(err),
         stack: new Error().stack
       });
+
       deferred.reject(err);
     }
 
     return deferred.promise;
   },
   deleteByQuery: function deleteByQuery(appId, collectionName, query) {
-    var deferred = q.defer();
+    var deferred = _q["default"].defer();
 
     try {
       if (connector.connected === false) {
@@ -862,17 +884,19 @@ var document = {
 
       }, function (err, doc) {
         if (err) {
-          winston.log('error', err);
+          _winston["default"].log('error', err);
+
           deferred.reject(err);
         }
 
         deferred.resolve(doc.result);
       });
     } catch (err) {
-      winston.log('error', {
+      _winston["default"].log('error', {
         error: String(err),
         stack: new Error().stack
       });
+
       deferred.reject(err);
     }
 
@@ -888,7 +912,7 @@ var document = {
                Reject->Error on findOne() or file not found(null)
     */
   getFile: function getFile(appId, filename) {
-    var deferred = q.defer();
+    var deferred = _q["default"].defer();
 
     try {
       connector.client.db(appId).collection('fs.files').findOne({
@@ -905,10 +929,11 @@ var document = {
         deferred.resolve(file);
       });
     } catch (err) {
-      winston.log('error', {
+      _winston["default"].log('error', {
         error: String(err),
         stack: new Error().stack
       });
+
       deferred.reject(err);
     }
 
@@ -921,16 +946,17 @@ var document = {
     */
   getFileStreamById: function getFileStreamById(appId, fileId) {
     try {
-      var gfs = Grid(connector.client.db(appId), mongodb);
+      var gfs = (0, _gridfsStream["default"])(connector.client.db(appId), _mongodb["default"]);
       var readstream = gfs.createReadStream({
         _id: fileId
       });
       return readstream;
     } catch (err) {
-      winston.log('error', {
+      _winston["default"].log('error', {
         error: String(err),
         stack: new Error().stack
       });
+
       return null;
     }
   },
@@ -950,7 +976,7 @@ var document = {
         while (1) {
           switch (_context.prev = _context.next) {
             case 0:
-              deferred = q.defer();
+              deferred = _q["default"].defer();
               _context.prev = 1;
               _context.next = 4;
               return connector.client.db(appId).collection('fs.files').findOne({
@@ -985,10 +1011,12 @@ var document = {
             case 8:
               _context.prev = 8;
               _context.t0 = _context["catch"](1);
-              winston.log('error', {
+
+              _winston["default"].log('error', {
                 error: String(_context.t0),
                 stack: new Error().stack
               });
+
               deferred.reject(_context.t0);
 
             case 12:
@@ -1016,10 +1044,10 @@ var document = {
                Reject->Error on writing file
     */
   saveFileStream: function saveFileStream(appId, fileStream, fileName, contentType) {
-    var deferred = q.defer();
+    var deferred = _q["default"].defer();
 
     try {
-      var bucket = new mongodb.GridFSBucket(connector.client.db(appId));
+      var bucket = new _mongodb["default"].GridFSBucket(connector.client.db(appId));
       var writeStream = bucket.openUploadStream(fileName, {
         contentType: contentType,
         w: 1
@@ -1031,10 +1059,11 @@ var document = {
         deferred.resolve(file);
       });
     } catch (err) {
-      winston.log('error', {
+      _winston["default"].log('error', {
         error: String(err),
         stack: new Error().stack
       });
+
       deferred.reject(err);
     }
 
@@ -1069,7 +1098,7 @@ function _sanitizeQuery(query) {
 }
 
 function _save(appId, collectionName, document) {
-  var deferredMain = q.defer();
+  var deferredMain = _q["default"].defer();
 
   try {
     if (document._isModified) {
@@ -1086,14 +1115,16 @@ function _save(appId, collectionName, document) {
       doc = _deserialize(doc);
       deferredMain.resolve(doc);
     }, function (err) {
-      winston.log('error', err);
+      _winston["default"].log('error', err);
+
       deferredMain.reject(err);
     });
   } catch (err) {
-    winston.log('error', {
+    _winston["default"].log('error', {
       error: String(err),
       stack: new Error().stack
     });
+
     deferred.reject(err);
   }
 
@@ -1122,10 +1153,11 @@ function _serialize(document) {
     });
     return document;
   } catch (err) {
-    winston.log('error', {
+    _winston["default"].log('error', {
       error: String(err),
       stack: new Error().stack
     });
+
     throw err;
   }
 }
@@ -1217,10 +1249,11 @@ function _deserialize(docs) {
 
     return docs;
   } catch (err) {
-    winston.log('error', {
+    _winston["default"].log('error', {
       error: String(err),
       stack: new Error().stack
     });
+
     throw err;
   }
 }

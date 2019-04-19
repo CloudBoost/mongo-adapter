@@ -7,7 +7,7 @@
 const { Db } = require('mongodb');
 const q = require('q');
 const winston = require('winston');
-const connector = require('./connector');
+const connector = require('./MongoAdapter');
 
 // Private Functions
 function _dropIndex(appId, collectionName, indexString) {
