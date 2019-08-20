@@ -7,38 +7,6 @@ const { ReplSet, Server, MongoClient } = mongodb;
 
 class MongoAdapter {
   /**
-   * Connected MongoDB client instance
-   *
-   * @type {Object|null}
-   */
-  client = null;
-
-  /**
-   * Current connection's status
-   *
-   * @type {boolean}
-   */
-  connected = false;
-
-  /**
-   * Current connection's credentials
-   *
-   * @type {Object}
-   * @param {string} credentials
-   */
-  credentials = {
-    connectionString: ''
-  };
-
-  constructor (credentials) {
-    this.credentials = credentials
-    this.connectionStringParser = new ConnectionStringParser({
-      scheme: "mongodb",
-      hosts: []
-    });
-  }
-
-  /**
    * Creates a MongoDB connection
    *
    * @param {Object} credentials credentials object
@@ -46,18 +14,23 @@ class MongoAdapter {
    *
    * @returns {Promise<Object>} dbClient
    */
-  connect = async ({ connectionString }) => {
-    this.client = await MongoClient.connect(connectionString, {
+  static connect = async ({ connectionString }) => {
+    const client = await MongoClient.connect(connectionString, {
       poolSize: 200,
       useNewUrlParser: true,
     });
-    this.connected = true;
-    this.connectionString = connectionString;
 
-    return this.client;
+    return client;
   }
 
-  replSet = (configs) => {
+  /**
+   *
+   * @param {Object} configs
+   * @param {string} connectionString database connection string
+   *
+   * @returns {ReplSet} replSet
+   */
+  static replSet = (configs, connectionString = '') => {
     if (Array.isArray(configs) && configs.length > 0) {
       const servers = configs.map(config => {
         return new Server(config.host, parseInt(mongoConfig.port, 10))
@@ -67,9 +40,13 @@ class MongoAdapter {
 
       return replSet;
     }
+    const connectionStringParser = new ConnectionStringParser({
+      scheme: "mongodb",
+      hosts: []
+    });
 
-    const connectionObject = this.connectionStringParser
-      .parse(this.credentials.connectionString);
+    const connectionObject = connectionStringParser
+      .parse(connectionString);
 
     return new ReplSet(connectionObject.hosts);
   }
@@ -81,24 +58,19 @@ class MongoAdapter {
    *
    * @memberof Connector
    *
+   * @param {Object} client Connected mongo database client
+   *
    * @returns {void}
    */
-  disconnect = () => {
-    if (this.connected) {
-      this.client.close();
-      this.connected = false;
-      this.credentials = {
-        connectionString: ''
-      };
-    } else {
-      throw new errors.DatabaseConnectionError();
-    }
+  disconnect = client => {
+    client.close();
   }
 
   /**
    * Returns the document that matches the _id with the documentId
    *
    * @param {Object} details
+   * @param {Object} details.client
    * @param {string} details.appId
    * @param {string} details.collectionName
    * @param {string} details.documentId
@@ -107,14 +79,16 @@ class MongoAdapter {
    *
    * @returns {Promise<object>} document
    */
-  findById = async ({
+  static findById = async ({
+    client,
     appId,
     collectionName,
     documentId,
     accessList,
     isMasterKey
   }) => {
-    return this.findOne({
+    return MongoAdapter.findOne({
+      client,
       appId,
       collectionName,
       query: {
@@ -133,7 +107,7 @@ class MongoAdapter {
    *
    * @returns {Promise<Array>} documents
    */
-  _include = async (appId, include, docs) => {
+  static _include = async (appId, include, docs) => {
     const currentDocs = [ ...docs ];
 
     // This function is for joins. :)
@@ -190,7 +164,7 @@ class MongoAdapter {
         }
       };
 
-      promises.push(this.fetch_data(appId, collectionName, query));
+      promises.push(MongoAdapter.fetch_data(appId, collectionName, query));
     }
 
     return Promise.all(promises).then((arrayOfDocs) => {
@@ -211,7 +185,7 @@ class MongoAdapter {
           }
         }
         if (rInclude.length > 0) {
-          pr.push(this._include(appId, rInclude, arrayOfDocs[i]));
+          pr.push(MongoAdapter._include(appId, rInclude, arrayOfDocs[i]));
         } else {
           pr.push(Promise.resolve(arrayOfDocs[i]));
         }
@@ -253,7 +227,7 @@ class MongoAdapter {
           }
         }
 
-        const deserializedDocs = this._deserialize(currentDocs);
+        const deserializedDocs = MongoAdapter._deserialize(currentDocs);
 
         return deserializedDocs;
       });
@@ -261,23 +235,19 @@ class MongoAdapter {
   }
 
   /**
-   *
+   * @param {Object} mongoClient
    * @param {string} appId
    * @param {string} collectionName
    * @param {Object} qry
    *
    * @returns {Promise<Array>} documents
    */
-  fetch_data = async (appId, collectionName, qry) => {
-    if (this.connected === false) {
-      throw new errors.DatabaseConnectionError();
-    }
-
+  static fetch_data = async (client, appId, collectionName, qry) => {
     if (!collectionName || !qry._id.$in) {
       return [];
     }
 
-    return this.client.db(appId)
+    return client.db(appId)
       .collection(collectionName)
       .find(qry)
       .toArray();
@@ -286,6 +256,7 @@ class MongoAdapter {
   /**
    *
    * @param {Object} details
+   * @param {Object} details.client
    * @param {string} details.appId
    * @param {string} details.collectionName
    * @param {Object} details.query
@@ -296,7 +267,8 @@ class MongoAdapter {
    * @param {Object} details.accessList
    * @param {boolean} details.isMasterKey
    */
-  find = async ({
+  static find = async ({
+    client,
     appId,
     collectionName,
     query,
@@ -307,11 +279,7 @@ class MongoAdapter {
     accessList,
     isMasterKey
   }) => {
-    if (this.connected === false) {
-      throw new errors.DatabaseConnectionError();
-    }
-
-    const collection = this.client
+    const collection = client
       .db(appId)
       .collection(collectionName);
 
@@ -436,7 +404,7 @@ class MongoAdapter {
     }
 
     // delete $include and $includeList recursively
-    query = this._sanitizeQuery(query);
+    query = MongoAdapter._sanitizeQuery(query);
 
     let findQuery = collection.find(query).project(select);
 
@@ -456,17 +424,18 @@ class MongoAdapter {
     const documents = await findQuery.toArray();
 
     if (!include || include.length === 0) {
-      const deserializedDocuments = this._deserialize(documents);
+      const deserializedDocuments = MongoAdapter._deserialize(documents);
 
       return deserializedDocuments;
     }
 
-    return this._include({ appId, include, docs })
+    return MongoAdapter._include({ appId, include, docs })
   }
 
   /**
    *
    * @param {Object} details
+   * @param {Object} details.client
    * @param {string} details.appId
    * @param {string} details.collectionName
    * @param {Object} details.query
@@ -479,7 +448,8 @@ class MongoAdapter {
    *
    * @returns {Promise<Object|void>} document
    */
-  findOne = async ({
+  static findOne = async ({
+    client,
     appId,
     collectionName,
     query,
@@ -489,11 +459,8 @@ class MongoAdapter {
     accessList,
     isMasterKey
   }) => {
-    if (this.connected === false) {
-      throw new errors.DatabaseConnectionError();
-    }
-
-    const documents = await this.find({
+    const documents = await MongoAdapter.find({
+      client,
       appId,
       collectionName,
       query,
@@ -513,18 +480,16 @@ class MongoAdapter {
   /**
    *
    * @param {Object} details
+   * @param {Object} details.client
    * @param {string} details.appId
    * @param {Array} details.documents
    *
    * @returns {Promise<Object>} documents
    */
-  save = async ({ appId, documents }) => {
-    if (this.connected === false) {
-      throw new errors.DatabaseConnectionError();
-    }
-
+  static save = async ({ client, appId, documents }) => {
     const savePromises = documents.map(document => {
-      return this._save({
+      return MongoAdapter._save({
+        client,
         appId,
         collectionName: document._tableName,
         document
@@ -537,18 +502,15 @@ class MongoAdapter {
   /**
    *
    * @param {Object} details
+   * @param {Object} details.client
    * @param {string} details.appId
    * @param {string} details.collectionName
    * @param {Object} details.document
    *
    * @returns {Promise<Object>} document
    */
-  _update = async ({ appId, collectionName, document }) => {
-    if (this.connected === false) {
-      throw new errors.DatabaseConnectionError();
-    }
-
-    const collection = this.client
+  static _update = async ({ client, appId, collectionName, document }) => {
+    const collection = client
       .db(appId)
       .collection(collectionName);
 
@@ -572,24 +534,27 @@ class MongoAdapter {
   /**
    *
    * @param {Object} details
+   * @param {Object} details.client
    * @param {string} details.appId
    * @param {string} details.collectionName
    * @param {Object} details.query
-   * @param {number} details.limit
    * @param {number} details.skip
    *
    * @returns {Promise<Object>} document
    */
-  count = async ({ appId, collectionName, query, limit, skip }) => {
-    if (this.connected === false) {
-      throw new errors.DatabaseConnectionError();
-    }
+  static count = async ({
+    client,
+    appId,
+    collectionName,
+    query,
+    skip
+  }) => {
 
-    const collection = this.client.db(appId)
+    const collection = client.db(appId)
       .collection(collectionName);
 
     // delete $include and $includeList recursively
-    const cleanQuery = this._sanitizeQuery(query);
+    const cleanQuery = MongoAdapter._sanitizeQuery(query);
 
     let findQuery = collection.find(cleanQuery);
 
@@ -603,6 +568,7 @@ class MongoAdapter {
   /**
    *
    * @param {Object} details
+   * @param {Object} details.client
    * @param {string} details.appId
    * @param {string} details.collectionName
    * @param {Array} details.onKey
@@ -613,7 +579,8 @@ class MongoAdapter {
    *
    * @returns {Promise<Object>} document
    */
-  distinct = async ({
+  static distinct = async ({
+    client,
     appId,
     collectionName,
     onKey,
@@ -623,11 +590,7 @@ class MongoAdapter {
     limit,
     skip
   }) => {
-    if (this.connected === false) {
-      throw new DatabaseConnectionError
-    }
-
-    const collection = this.client.db(appId)
+    const collection = client.db(appId)
       .collection(collectionName);
 
     let include = [];
@@ -639,7 +602,7 @@ class MongoAdapter {
     }
 
     // delete $include and $includeList recursively
-    query = this._sanitizeQuery(query);
+    query = MongoAdapter._sanitizeQuery(query);
 
     const keys = {};
     const indexForDot = onKey.indexOf('.');
@@ -696,8 +659,8 @@ class MongoAdapter {
 
     const cursor = await collection.aggregate(pipeline);
     const documents = await cursor.toArray();
-    const includedDocuments = this._include(appId, include, documents);
-    const deserializedDocuments = this._deserialize(includedDocuments);
+    const includedDocuments = MongoAdapter._include(appId, include, documents);
+    const deserializedDocuments = MongoAdapter._deserialize(includedDocuments);
 
     return deserializedDocuments;
   }
@@ -705,6 +668,7 @@ class MongoAdapter {
   /**
    *
    * @param {Object} details
+   * @param {Object} details.client
    * @param {string} details.appId
    * @param {string} details.collectionName
    * @param {Array} details.pipeline
@@ -715,7 +679,8 @@ class MongoAdapter {
    *
    * @returns {Promise<Object>}
    */
-  aggregate = async ({
+  static aggregate = async ({
+    client,
     appId,
     collectionName,
     pipeline,
@@ -724,11 +689,7 @@ class MongoAdapter {
     accessList,
     isMasterKey
   }) => {
-    if (this.connected === false) {
-      throw new errors.DatabaseConnectionError();
-    }
-
-    const collection = this.client.db(appId)
+    const collection = client.db(appId)
       .collection(collectionName);
 
     let query = {};
@@ -803,18 +764,20 @@ class MongoAdapter {
    *
    *
    * @param {Object} details
+   * @param {Object} details.client
    * @param {string} details.appId
    * @param {string} details.collectionName
    * @param {Object} details.document
    *
    * @returns {Promise}
    */
-  _insert = async ({ appId, collectionName, document }) => {
-    if (this.connected === false) {
-      throw new errors.DatabaseConnectionError();
-    }
-
-    return this.client.db(appId)
+  static _insert = async ({
+    client,
+    appId,
+    collectionName,
+    document
+  }) => {
+    return client.db(appId)
       .collection(collectionName)
       .save(document);
   }
@@ -822,24 +785,26 @@ class MongoAdapter {
   /**
    *
    * @param {Object} details
+   * @param {Object} details.client
    * @param {string} details.appId
    * @param {string} details.collectionName
    * @param {Object} details.document
    *
    * @returns {Promise}
    */
-  delete = async ({ appId, collectionName, document }) => {
+  static delete = async ({
+    client,
+    appId,
+    collectionName,
+    document
+  }) => {
     const documentId = document._id;
-
-    if (this.connected === false) {
-      throw new errors.DatabaseConnectionError();
-    }
 
     if (!document._id) {
       throw new errors.InvalidAccessError();
     }
 
-    const collection = this.client.db(appId)
+    const collection = client.db(appId)
       .collection(collectionName);
 
     const query = {
@@ -860,18 +825,20 @@ class MongoAdapter {
   /**
    *
    * @param {Object} details
+   * @param {Object} details.client
    * @param {string} details.appId
    * @param {string} details.collectionName
    * @param {Object} details.query
    *
    * @returns {Promise<Object>} result
    */
-  deleteByQuery = async (appId, collectionName, query) => {
-    if (this.connected === false) {
-      throw new errors.DatabaseConnectionError();
-    }
-
-    const collection = this.client.db(appId)
+  static deleteByQuery = async ({
+    client,
+    appId,
+    collectionName,
+    query
+  }) => {
+    const collection = client.db(appId)
       .collection(collectionName);
 
     const doc = await collection.remove(query, {
@@ -886,17 +853,18 @@ class MongoAdapter {
    * Get file from gridfs
    *
    * @param {Object} details
+   * @param {Object} details.client
    * @param {string} details.appId
    * @param {string} details.filename
    *
    * @returns {Promise<Object>} file
    */
-  getFile = async ({ appId, filename }) => {
-    if (this.connected === false) {
-      throw new errors.DatabaseConnectionError();
-    }
-
-    return this.client.db(appId)
+  static getFile = async ({
+    client,
+    appId,
+    filename
+  }) => {
+    return client.db(appId)
       .collection('fs.files')
       .findOne({
         filename,
@@ -907,17 +875,18 @@ class MongoAdapter {
    * Get fileStream from gridfs
    *
    * @param {Object} details
+   * @param {Object} details.client
    * @param {string} details.appId
    * @param {string} details.fileId
    *
    * @returns {Filestream} filestream
    */
-  getFileStreamById = ({ appId, fileId }) => {
-    if (this.connected === false) {
-      throw new errors.DatabaseConnectionError();
-    }
-
-    const gfs = Grid(this.client.db(appId), mongodb);
+  static getFileStreamById = ({
+    client,
+    appId,
+    fileId
+  }) => {
+    const gfs = Grid(client.db(appId), mongodb);
     const readstream = gfs.createReadStream({ _id: fileId });
 
     return readstream;
@@ -927,17 +896,14 @@ class MongoAdapter {
    * Delete file from gridfs
    *
    * @param {Object} details
+   * @param {Object} details.client
    * @param {string} details.appId
    * @param {string} details.filename
    *
    * @returns {Promise<boolean>}
    */
-  deleteFileFromGridFs = async (appId, filename) => {
-    if (this.connected === false) {
-      throw new errors.DatabaseConnectionError();
-    }
-
-    const document = await this.client.db(appId)
+  static deleteFileFromGridFs = async ({ client, appId, filename }) => {
+    const document = await client.db(appId)
       .collection('fs.files')
       .findOne({
         filename,
@@ -945,7 +911,7 @@ class MongoAdapter {
 
     if (document) {
       const id = document._id;
-      return this.client.db(appId)
+      return client.db(appId)
         .collection('fs')
         .deleteMany({
           _id: id,
@@ -959,14 +925,16 @@ class MongoAdapter {
    * Save filestream to gridfs
    *
    * @param {Object} details
-   * @param {string} appId
-   * @param {Filestream} fileStream
-   * @param {string} fileName
-   * @param {string} contentType
+   * @param {Object} details.client
+   * @param {string} details.appId
+   * @param {Filestream} details.fileStream
+   * @param {string} details.fileName
+   * @param {string} details.contentType
    *
    * @returns {Promise<Object>} file
    */
-  saveFileStream = ({
+  static saveFileStream = ({
+    client,
     appId,
     fileStream,
     fileName,
@@ -974,7 +942,7 @@ class MongoAdapter {
   }) => {
     return new Promise((resolve, reject) => {
       try {
-        const bucket = new mongodb.GridFSBucket(this.client.db(appId));
+        const bucket = new mongodb.GridFSBucket(client.db(appId));
         const writeStream = bucket.openUploadStream(fileName, {
           contentType,
           w: 1,
@@ -992,14 +960,14 @@ class MongoAdapter {
         reject(error);
       }
     })
-  },
+  }
 
   /**
    * @param {Object} query
    *
    * @returns {Object} sanitizedQuery
    */
-  _sanitizeQuery = (query) => {
+  static _sanitizeQuery = (query) => {
     if (query) {
       const sanitizedQuery = JSON.parse(JSON.stringify(query));
 
@@ -1013,13 +981,13 @@ class MongoAdapter {
 
       if (sanitizedQuery.$or && sanitizedQuery.$or.length > 0) {
         for (let i = 0; i < sanitizedQuery.$or.length; ++i) {
-          sanitizedQuery.$or[i] = this._sanitizeQuery(sanitizedQuery.$or[i]);
+          sanitizedQuery.$or[i] = MongoAdapter._sanitizeQuery(sanitizedQuery.$or[i]);
         }
       }
 
       if (sanitizedQuery.$and && sanitizedQuery.$and.length > 0) {
         for (let i = 0; i < sanitizedQuery.$and.length; ++i) {
-          sanitizedQuery.$and[i] = this._sanitizeQuery(sanitizedQuery.$and[i]);
+          sanitizedQuery.$and[i] = MongoAdapter._sanitizeQuery(sanitizedQuery.$and[i]);
         }
       }
 
@@ -1030,13 +998,14 @@ class MongoAdapter {
   /**
    *
    * @param {Object} details
+   * @param {Object} details.client
    * @param {string} details.appId
    * @param {string} details.collectionName
    * @param {string} details.document
    *
    * @returns {Promise<Object>} document
    */
-  _save = async ({ appId, collectionName, document }) => {
+  static _save = async ({ client, appId, collectionName, document }) => {
     const documentCopy = { ...document };
 
     if (documentCopy._isModified) {
@@ -1046,16 +1015,17 @@ class MongoAdapter {
       delete documentCopy._modifiedColumns;
     }
 
-    const serializedDocument = this._serialize(documentCopy);
+    const serializedDocument = MongoAdapter._serialize(documentCopy);
 
     // column key array to track sub documents.
-    const document = await this._update({
+    const updatedDocument = await MongoAdapter._update({
+      client,
       appId,
       collectionName,
       serializedDocument
     });
 
-    const deserializedDocument = this._deserialize(document);
+    const deserializedDocument = MongoAdapter._deserialize(updatedDocument);
 
     return deserializedDocument;
   }
@@ -1065,7 +1035,7 @@ class MongoAdapter {
    *
    * @returns {Object} serializedDocument
    */
-  _serialize = (document) => {
+  static _serialize = (document) => {
     const serializedDocument = JSON.parse(JSON.stringify(document));
 
     Object.keys(serializedDocument).forEach((key) => {
@@ -1095,7 +1065,7 @@ class MongoAdapter {
    *
    * @returns {Array|Object} document or documents
    */
-  _deserialize = (docs) => {
+  static _deserialize = (docs) => {
     if (docs.length > 0) {
       for (let i = 0; i < docs.length; i++) {
         const document = docs[i];
@@ -1171,19 +1141,21 @@ class MongoAdapter {
 
   /**
    * @param {Object} details
+   * @param {Object} details.client
    * @param {string} details.appId
    * @param {string} details.collectionName
    * @param {string} details.indexString
    *
    * @returns {Promise<Object|undefined>}
    */
-  _dropIndex = async ({ appId, collectionName, indexString }) => {
-    if (this.connected === false) {
-      throw new errors.DatabaseConnectionError();
-    }
-
+  static _dropIndex = async ({
+    client,
+    appId,
+    collectionName,
+    indexString
+  }) => {
     if (indexString && indexString !== '') {
-      const collection = this.client.db(appId).collection(collectionName);
+      const collection = client.db(appId).collection(collectionName);
 
       return collection.dropIndex(indexString);
     }
@@ -1191,19 +1163,21 @@ class MongoAdapter {
 
    /**
    * @param {Object} details
+   * @param {Object} details.client
    * @param {string} details.appId
    * @param {string} details.collectionName
    * @param {Object} details.query
    *
    * @returns {Promise<Object|undefined>}
    */
-  _unsetColumn = async ({ appId, collectionName, query }) => {
-    if (this.connected === false) {
-      throw new errors.DatabaseConnectionError();
-    }
-
+  static _unsetColumn = async ({
+    client,
+    appId,
+    collectionName,
+    query
+  }) => {
     if (query && Object.keys(query).length > 0) {
-      const collection = this.client.db(appId).collection(collectionName);
+      const collection = client.db(appId).collection(collectionName);
 
       return collection.update({}, {
         $unset: query,
@@ -1216,30 +1190,25 @@ class MongoAdapter {
   /**
    * This deletes the app database
    *
-   * @param {string} appId
+   * @param {Object} details
+   * @param {Object} details.client
+   * @param {string} details.appId
    *
    * @returns {Promise}
    */
-  drop = async (appId) => {
-    if (this.connected === false) {
-      throw new errors.DatabaseConnectionError();
-    }
-
-    return this.dropDatabase(appId);
+  static drop = async ({ client, appId }) => {
+    return MongoAdapter.dropDatabase({ client, appId });
   }
 
   /**
-   * @param {string} appId
+   *
+   * @param {Object} details
+   * @param {string} details.appId
+   * @param {Object} details.replSet
    *
    * @return {Promise<Object>} db
    */
-  create = async (appId) => {
-    if (this.connected === false) {
-      throw new errors.DatabaseConnectionError();
-    }
-
-    const replSet = this.replSet();
-
+  static create = async ({ appId, replSet }) => {
     const db = new Db(appId, replSet, { w: 1 });
 
     return db;
@@ -1248,17 +1217,18 @@ class MongoAdapter {
   /**
    *
    * @param {Object} details
+   * @param {Object} details.client
    * @param {string} details.appId
    * @param {string} details.collectionName
    *
    * @returns {Promise}
    */
-  getSearchableDocuments = ({ appId, collectionName }) => {
-    if (this.connected === false) {
-      throw new errors.DatabaseConnectionError();
-    }
-
-    const collection = this.client.db(appId)
+  static getSearchableDocuments = ({
+    client,
+    appId,
+    collectionName
+  }) => {
+    const collection = client.db(appId)
       .collection(collectionName);
     const findQuery = collection.find();
 
@@ -1266,35 +1236,32 @@ class MongoAdapter {
   }
 
   /**
-   * @param {string} appId
+   *
+   * @param {Object} details
+   * @param {Object} details.client
+   * @param {string} details.appId
    *
    * @returns {Promise}
    */
-  dropDatabase(appId) {
-    if (this.connected === false) {
-      throw new errors.DatabaseConnectionError();
-    }
-
-    const database = this.client.db(appId);
+  static dropDatabase({ client, appId }) {
+    const database = client.db(appId);
 
     return database.dropDatabase();
   }
 
   /**
    * @param {Object} details
+   * @param {Object} details.client
    * @param {string} details.appId
    * @param {string} details.collectionName
    * @param {Object} details.column
    *
    * @returns {Promise}
    */
-  addColumn({ appId, collectionName, column }) {
-    if (this.connected === false) {
-      throw new errors.DatabaseConnectionError();
-    }
-
+  static addColumn({ client, appId, collectionName, column }) {
     if (column.dataType === 'GeoPoint' || column.dataType === 'Text') {
-      return this.createIndex({
+      return MongoAdapter.createIndex({
+        client,
         appId,
         collectionName,
         columnName: column.name,
@@ -1306,20 +1273,18 @@ class MongoAdapter {
   /**
    *
    * @param {Object} details
+   * @param {Object} details.client
    * @param {string} details.appId
    * @param {string} details.collectionName
    * @param {Array} details.schema
    *
    * @returns {Promise}
    */
-  createCollection = async ({ appId, collectionName, schemas }) => {
-    if (this.connected === false) {
-      throw new errors.DatabaseConnectionError();
-    }
-
+  static createCollection = async ({ client, appId, collectionName, schemas }) => {
     for (let i = 0; i < schemas.length; i++) {
       if (schemas[i].dataType === 'GeoPoint') {
-        await this.createIndex({
+        await MongoAdapter.createIndex({
+          client,
           appId,
           collectionName,
           columnName: schemas[i].name,
@@ -1331,22 +1296,20 @@ class MongoAdapter {
 
   /**
    * @param {Object} details
+   * @param {Object} details.client
    * @param {string} details.appId
    * @param {string} details.collectionName
    * @param {string} details.columnType
    *
    * @returns {Promise}
    */
-  createIndex = async ({
+  static createIndex = async ({
+    client,
     appId,
     collectionName,
     columnName,
     columnType
   }) => {
-    if (this.connected === false) {
-      throw new errors.DatabaseConnectionError();
-    }
-
     const obj = {};
 
     if (columnType === 'Text') {
@@ -1358,7 +1321,7 @@ class MongoAdapter {
     }
 
     if (Object.keys(obj).length > 0) {
-      return this.client.db(appId)
+      return client.db(appId)
         .collection(collectionName)
         .createIndex(obj);
     }
@@ -1366,17 +1329,14 @@ class MongoAdapter {
 
   /**
    * @param {Object} details
+   * @param {Object} details.client
    * @param {string} details.appId
    * @param {string} details.collectionName
    *
    * @returns {Promise}
    */
-  deleteAndCreateTextIndexes = async ({ appId, collectionName }) => {
-    if (connector.connected === false) {
-      throw new errors.DatabaseConnectionError();
-    }
-
-    return this.client.db(appId)
+  static deleteAndCreateTextIndexes = async ({ client, appId, collectionName }) => {
+    return client.db(appId)
       .collection(collectionName)
       .createIndex({
         '$**': 'text',
@@ -1385,17 +1345,14 @@ class MongoAdapter {
 
   /**
    * @param {Object} details
+   * @param {Object} details.client
    * @param {string} details.appId
    * @param {string} details.collectionName
    *
    * @returns {Promise}
    */
-  getIndexes = async ({ appId, collectionName }) => {
-    if (this.connected === false) {
-      throw new errors.DatabaseConnectionError();
-    }
-
-    return this.client.db(appId)
+  static getIndexes = async ({ client, appId, collectionName }) => {
+    return client.db(appId)
       .collection(collectionName)
       .indexInformation();
   }
@@ -1403,6 +1360,7 @@ class MongoAdapter {
 
   /**
    * @param {Object} details
+   * @param {Object} details.client
    * @param {string} details.appId
    * @param {string} details.collectionName
    * @param {string} details.oldColumnName
@@ -1410,16 +1368,14 @@ class MongoAdapter {
    *
    * @return {Promise}
    */
-  renameColumn = async ({
+  static renameColumn = async ({
+    client,
     appId,
     collectionName,
     oldColumnName,
     newColumnName
   }) => {
-    if (this.connected === false) {
-      throw new errors.DatabaseConnectionError();
-    }
-    const collection = this.client.db(appId)
+    const collection = client.db(appId)
       .collection(collectionName);
 
     const query = {};
@@ -1439,6 +1395,7 @@ class MongoAdapter {
 
   /**
    * @param {Object} details
+   * @param {Object} details.client
    * @param {string} details.appId
    * @param {string} details.collectionName
    * @param {string} details.columnName
@@ -1446,16 +1403,13 @@ class MongoAdapter {
    *
    * @returns {Promise}
    */
-  dropColumn = async ({
+  static dropColumn = async ({
+    client,
     appId,
     collectionName,
     columnName,
     columnType
   }) => {
-    if (this.connected === false) {
-      throw new errors.DatabaseConnectionError();
-    }
-
     const query = {};
 
     query[columnName] = 1;
@@ -1466,53 +1420,53 @@ class MongoAdapter {
       indexName = `${columnName}_2dsphere`;
     }
 
-    await this._dropIndex({ appId, collectionName, indexName });
-    await this._unsetColumn({ appId, collectionName, query });
+    await MongoAdapter._dropIndex({ client, appId, collectionName, indexName });
+    await MongoAdapter._unsetColumn({ client, appId, collectionName, query });
   }
 
   /**
    * @param {Object} details
+   * @param {Object} details.client
    * @param {string} details.appId
    * @param {string} details.collectionName
    *
    * @returns {Promise}
    */
-  dropCollection = async ({ appId, collectionName }) => {
-    if (this.connected === false) {
-      throw new errors.DatabaseConnectionError();
-    }
-
-    return this.client.db(appId)
+  static dropCollection = async ({ client, appId, collectionName }) => {
+    return client.db(appId)
       .collection(collectionName)
       .drop();
   }
 
   /**
    * @param {Object} details
+   * @param {Object} details.client
    * @param {string} details.appId
    * @param {string} details.oldCollectionName
    * @param {string} details.newCollectionName
    *
    * @returns {Promise}
    */
-  renameCollection = async ({
+  static renameCollection = async ({
+    client,
     appId,
     oldCollectionName,
     newCollectionName
   }) => {
-    return this.client.db(appId)
+    return client.db(appId)
       .collection(oldCollectionName)
       .rename(newCollectionName);
   }
 
   /**
    * @param {Object} details
+   * @param {Object} details.client
    * @param {string} details.appId
    *
    * @returns {Promise}
    */
-  list = async (appId) => {
-    return this.client.db(appId)
+  static list = async ({ client, appId }) => {
+    return client.db(appId)
       .collection('_Schema')
       .find({})
       .toArray();
