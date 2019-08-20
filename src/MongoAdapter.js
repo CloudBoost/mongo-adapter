@@ -62,7 +62,7 @@ class MongoAdapter {
    *
    * @returns {void}
    */
-  disconnect = client => {
+  static disconnect = client => {
     client.close();
   }
 
