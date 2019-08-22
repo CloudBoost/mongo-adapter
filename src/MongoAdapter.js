@@ -2,10 +2,11 @@ import { ConnectionStringParser } from 'connection-string-parser';
 import mongodb from 'mongodb'
 import mongoUtil from './util';
 import errors from './errors';
+import BaseAdaptor from 'data-adaptor-base';
 
 const { ReplSet, Server, MongoClient } = mongodb;
 
-class MongoAdapter {
+class MongoAdapter extends BaseAdaptor {
   /**
    * Creates a MongoDB connection
    *
@@ -1208,7 +1209,7 @@ class MongoAdapter {
    *
    * @return {Promise<Object>} db
    */
-  static create = async ({ appId, replSet }) => {
+  static createDatabase = async ({ appId, replSet }) => {
     const db = new Db(appId, replSet, { w: 1 });
 
     return db;
@@ -1243,7 +1244,7 @@ class MongoAdapter {
    *
    * @returns {Promise}
    */
-  static dropDatabase({ client, appId }) {
+  static deleteDatabase ({ client, appId }) {
     const database = client.db(appId);
 
     return database.dropDatabase();
@@ -1403,7 +1404,7 @@ class MongoAdapter {
    *
    * @returns {Promise}
    */
-  static dropColumn = async ({
+  static deleteColumn = async ({
     client,
     appId,
     collectionName,
@@ -1432,7 +1433,7 @@ class MongoAdapter {
    *
    * @returns {Promise}
    */
-  static dropCollection = async ({ client, appId, collectionName }) => {
+  static deleteCollection = async ({ client, appId, collectionName }) => {
     return client.db(appId)
       .collection(collectionName)
       .drop();
@@ -1465,7 +1466,7 @@ class MongoAdapter {
    *
    * @returns {Promise}
    */
-  static list = async ({ client, appId }) => {
+  static listDatabases = async ({ client, appId }) => {
     return client.db(appId)
       .collection('_Schema')
       .find({})
