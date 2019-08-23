@@ -1,10 +1,10 @@
 {
-  "name": "@cloudboostplatform/mongo-adapter",
+  "name": "mongo-adapter",
   "version": "1.0.0",
   "description": "Cloudboost MongoDB adapter",
   "main": "dist/index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "echo \"No test specified\"",
     "build": "babel src --out-dir dist"
   },
   "repository": {
