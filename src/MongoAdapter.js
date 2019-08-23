@@ -31,7 +31,7 @@ class MongoAdapter extends BaseAdaptor {
    *
    * @returns {ReplSet} replSet
    */
-  static replSet = (configs, connectionString = '') => {
+  static _replSet = (configs, connectionString = '') => {
     if (Array.isArray(configs) && configs.length > 0) {
       const servers = configs.map(config => {
         return new Server(config.host, parseInt(mongoConfig.port, 10))
@@ -165,7 +165,7 @@ class MongoAdapter extends BaseAdaptor {
         }
       };
 
-      promises.push(MongoAdapter.fetch_data(appId, collectionName, query));
+      promises.push(MongoAdapter._fetch_data(appId, collectionName, query));
     }
 
     return Promise.all(promises).then((arrayOfDocs) => {
@@ -228,7 +228,7 @@ class MongoAdapter extends BaseAdaptor {
           }
         }
 
-        const deserializedDocs = MongoAdapter._deserialize(currentDocs);
+        const deserializedDocs = MongoAdapter.deserialize(currentDocs);
 
         return deserializedDocs;
       });
@@ -243,7 +243,7 @@ class MongoAdapter extends BaseAdaptor {
    *
    * @returns {Promise<Array>} documents
    */
-  static fetch_data = async (client, appId, collectionName, qry) => {
+  static _fetch_data = async (client, appId, collectionName, qry) => {
     if (!collectionName || !qry._id.$in) {
       return [];
     }
@@ -425,7 +425,7 @@ class MongoAdapter extends BaseAdaptor {
     const documents = await findQuery.toArray();
 
     if (!include || include.length === 0) {
-      const deserializedDocuments = MongoAdapter._deserialize(documents);
+      const deserializedDocuments = MongoAdapter.deserialize(documents);
 
       return deserializedDocuments;
     }
@@ -661,7 +661,7 @@ class MongoAdapter extends BaseAdaptor {
     const cursor = await collection.aggregate(pipeline);
     const documents = await cursor.toArray();
     const includedDocuments = MongoAdapter._include(appId, include, documents);
-    const deserializedDocuments = MongoAdapter._deserialize(includedDocuments);
+    const deserializedDocuments = MongoAdapter.deserialize(includedDocuments);
 
     return deserializedDocuments;
   }
@@ -1016,7 +1016,7 @@ class MongoAdapter extends BaseAdaptor {
       delete documentCopy._modifiedColumns;
     }
 
-    const serializedDocument = MongoAdapter._serialize(documentCopy);
+    const serializedDocument = MongoAdapter.serialize(documentCopy);
 
     // column key array to track sub documents.
     const updatedDocument = await MongoAdapter._update({
@@ -1026,7 +1026,7 @@ class MongoAdapter extends BaseAdaptor {
       serializedDocument
     });
 
-    const deserializedDocument = MongoAdapter._deserialize(updatedDocument);
+    const deserializedDocument = MongoAdapter.deserialize(updatedDocument);
 
     return deserializedDocument;
   }
@@ -1036,7 +1036,7 @@ class MongoAdapter extends BaseAdaptor {
    *
    * @returns {Object} serializedDocument
    */
-  static _serialize = (document) => {
+  static serialize = (document) => {
     const serializedDocument = JSON.parse(JSON.stringify(document));
 
     Object.keys(serializedDocument).forEach((key) => {
@@ -1066,7 +1066,7 @@ class MongoAdapter extends BaseAdaptor {
    *
    * @returns {Array|Object} document or documents
    */
-  static _deserialize = (docs) => {
+  static deserialize = (docs) => {
     if (docs.length > 0) {
       for (let i = 0; i < docs.length; i++) {
         const document = docs[i];
@@ -1188,18 +1188,6 @@ class MongoAdapter extends BaseAdaptor {
     }
   }
 
-  /**
-   * This deletes the app database
-   *
-   * @param {Object} details
-   * @param {Object} details.client
-   * @param {string} details.appId
-   *
-   * @returns {Promise}
-   */
-  static drop = async ({ client, appId }) => {
-    return MongoAdapter.dropDatabase({ client, appId });
-  }
 
   /**
    *
@@ -1213,27 +1201,6 @@ class MongoAdapter extends BaseAdaptor {
     const db = new Db(appId, replSet, { w: 1 });
 
     return db;
-  }
-
-  /**
-   *
-   * @param {Object} details
-   * @param {Object} details.client
-   * @param {string} details.appId
-   * @param {string} details.collectionName
-   *
-   * @returns {Promise}
-   */
-  static getSearchableDocuments = ({
-    client,
-    appId,
-    collectionName
-  }) => {
-    const collection = client.db(appId)
-      .collection(collectionName);
-    const findQuery = collection.find();
-
-    return findQuery.toArray();
   }
 
   /**
@@ -1433,7 +1400,7 @@ class MongoAdapter extends BaseAdaptor {
    *
    * @returns {Promise}
    */
-  static deleteCollection = async ({ client, appId, collectionName }) => {
+  static deleteTable = async ({ client, appId, collectionName }) => {
     return client.db(appId)
       .collection(collectionName)
       .drop();
@@ -1448,7 +1415,7 @@ class MongoAdapter extends BaseAdaptor {
    *
    * @returns {Promise}
    */
-  static renameCollection = async ({
+  static renameTable = async ({
     client,
     appId,
     oldCollectionName,
@@ -1458,21 +1425,6 @@ class MongoAdapter extends BaseAdaptor {
       .collection(oldCollectionName)
       .rename(newCollectionName);
   }
-
-  /**
-   * @param {Object} details
-   * @param {Object} details.client
-   * @param {string} details.appId
-   *
-   * @returns {Promise}
-   */
-  static listDatabases = async ({ client, appId }) => {
-    return client.db(appId)
-      .collection('_Schema')
-      .find({})
-      .toArray();
-  }
-
 }
 
 export default MongoAdapter;
