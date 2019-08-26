@@ -6,8 +6,10 @@ install:
   - npm install
 
 script:
+  - npm run lint
+  - npm audit
   - npm test
-  
+
 deploy:
   provider: npm
   email: $NPM_EMAIL

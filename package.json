@@ -4,6 +4,7 @@
   "description": "Cloudboost MongoDB adapter",
   "main": "dist/index.js",
   "scripts": {
+    "lint": "eslint .",
     "test": "echo \"No test specified\"",
     "build": "babel src --out-dir dist"
   },
@@ -27,10 +28,13 @@
     "winston": "^3.2.1"
   },
   "devDependencies": {
-    "@babel/cli": "^7.4.3",
-    "@babel/core": "^7.4.3",
+    "@babel/cli": "^7.5.0",
+    "@babel/core": "^7.5.0",
     "@babel/node": "^7.2.2",
     "@babel/plugin-proposal-class-properties": "^7.4.0",
-    "@babel/preset-env": "^7.4.3"
+    "@babel/preset-env": "^7.4.3",
+    "babel-eslint": "^10.0.3",
+    "eslint": "^6.2.2",
+    "eslint-plugin-jest": "^22.15.2"
   }
 }

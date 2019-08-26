@@ -1,10 +1,9 @@
 import { ConnectionStringParser } from 'connection-string-parser';
-import mongodb from 'mongodb'
-import mongoUtil from './util';
+import mongodb from 'mongodb';
 import errors from './errors';
 import BaseAdaptor from 'data-adaptor-base';
 
-const { ReplSet, Server, MongoClient } = mongodb;
+const { ReplSet, Server, MongoClient, Grid, Db } = mongodb;
 
 class MongoAdapter extends BaseAdaptor {
   /**
@@ -34,7 +33,7 @@ class MongoAdapter extends BaseAdaptor {
   static _replSet = (configs, connectionString = '') => {
     if (Array.isArray(configs) && configs.length > 0) {
       const servers = configs.map(config => {
-        return new Server(config.host, parseInt(mongoConfig.port, 10))
+        return new Server(config.host, parseInt(config.port, 10))
       });
 
       const replSet = new ReplSet(servers);
@@ -298,7 +297,7 @@ class MongoAdapter extends BaseAdaptor {
         },
       ];
     } else {
-      oldQuery = query.$or;
+      let oldQuery = query.$or;
       if (oldQuery[0].$include) {
         if (oldQuery[0].$include.length > 0) {
           include = include.concat(oldQuery[0].$include);
@@ -430,7 +429,7 @@ class MongoAdapter extends BaseAdaptor {
       return deserializedDocuments;
     }
 
-    return MongoAdapter._include({ appId, include, docs })
+    return MongoAdapter._include({ appId, include, documents })
   }
 
   /**
@@ -467,7 +466,6 @@ class MongoAdapter extends BaseAdaptor {
       query,
       select,
       sort,
-      skip: 1,
       skip,
       accessList,
       isMasterKey
