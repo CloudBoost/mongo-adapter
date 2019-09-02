@@ -1,7 +1,2 @@
-import MongoAdapter from './MongoAdapter';
-import errors from './errors';
-
-module.exports = {
-  MongoAdapter,
-  errors
-};
+export { default as MongoAdapter } from './MongoAdapter';
+export { default as errors } from './errors';
