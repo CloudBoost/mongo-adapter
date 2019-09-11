@@ -1022,7 +1022,7 @@ class MongoAdapter extends BaseAdaptor {
       client,
       appId,
       collectionName,
-      serializedDocument
+      document: serializedDocument
     });
 
     const deserializedDocument = MongoAdapter.deserialize(updatedDocument);
