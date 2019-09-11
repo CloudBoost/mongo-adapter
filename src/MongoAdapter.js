@@ -2,8 +2,9 @@ import { ConnectionStringParser } from 'connection-string-parser';
 import mongodb from 'mongodb';
 import errors from './errors';
 import BaseAdaptor from 'data-adaptor-base';
+import Grid from 'gridfs-stream';
 
-const { ReplSet, Server, MongoClient, Grid, Db } = mongodb;
+const { ReplSet, Server, MongoClient, Db } = mongodb;
 
 class MongoAdapter extends BaseAdaptor {
   /**
