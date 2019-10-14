@@ -1,6 +1,6 @@
 {
   "name": "mongo-adapter",
-  "version": "1.0.7",
+  "version": "1.0.8",
   "description": "Cloudboost MongoDB adapter",
   "main": "dist/index.js",
   "scripts": {
