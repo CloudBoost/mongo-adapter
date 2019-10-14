@@ -908,7 +908,7 @@ class MongoAdapter extends BaseAdaptor {
       });
 
     if (document) {
-      const id = document._id;otse
+      const id = document._id;
       return client.db(appId)
         .collection('fs')
         .deleteMany({
