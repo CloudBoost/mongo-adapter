@@ -73,7 +73,7 @@ class MongoAdapter extends BaseAdaptor {
    * @param {Object} details
    * @param {Object} details.client
    * @param {string} details.appId
-   * @param {string} details.collectionName
+   * @param {string} details.tableName
    * @param {string} details.documentId
    * @param {Object} details.accessList
    * @param {boolean} details.isMasterKey
@@ -83,7 +83,7 @@ class MongoAdapter extends BaseAdaptor {
   static findById = async ({
     client,
     appId,
-    collectionName,
+    tableName,
     documentId,
     accessList,
     isMasterKey
@@ -91,7 +91,7 @@ class MongoAdapter extends BaseAdaptor {
     return MongoAdapter.findOne({
       client,
       appId,
-      collectionName,
+      tableName,
       query: {
         _id: documentId
       },
@@ -130,7 +130,7 @@ class MongoAdapter extends BaseAdaptor {
       }
       // include this column and merge.
       const idList = [];
-      let collectionName = null;
+      let tableName = null;
 
       currentDocs.forEach((doc) => {
         if (doc[columnName] !== null) {
@@ -138,9 +138,9 @@ class MongoAdapter extends BaseAdaptor {
           if (Object.getPrototypeOf(doc[columnName]) === Object.prototype) {
             if (doc[columnName] && doc[columnName]._id) {
               if (doc[columnName]._type === 'file') {
-                collectionName = '_File';
+                tableName = '_File';
               } else {
-                collectionName = doc[columnName]._tableName;
+                tableName = doc[columnName]._tableName;
               }
               idList.push(doc[columnName]._id);
             }
@@ -148,9 +148,9 @@ class MongoAdapter extends BaseAdaptor {
             for (let j = 0; j < doc[columnName].length; j++) {
               if (doc[columnName][j] && doc[columnName][j]._id) {
                 if (doc[columnName][j]._type === 'file') {
-                  collectionName = '_File';
+                  tableName = '_File';
                 } else {
-                  collectionName = doc[columnName][j]._tableName;
+                  tableName = doc[columnName][j]._tableName;
                 }
                 idList.push(doc[columnName][j]._id);
               }
@@ -165,7 +165,7 @@ class MongoAdapter extends BaseAdaptor {
         }
       };
 
-      promises.push(MongoAdapter._fetch_data(appId, collectionName, query));
+      promises.push(MongoAdapter._fetch_data(appId, tableName, query));
     }
 
     return Promise.all(promises).then((arrayOfDocs) => {
@@ -238,18 +238,18 @@ class MongoAdapter extends BaseAdaptor {
   /**
    * @param {Object} mongoClient
    * @param {string} appId
-   * @param {string} collectionName
+   * @param {string} tableName
    * @param {Object} qry
    *
    * @returns {Promise<Array>} documents
    */
-  static _fetch_data = async (client, appId, collectionName, qry) => {
-    if (!collectionName || !qry._id.$in) {
+  static _fetch_data = async (client, appId, tableName, qry) => {
+    if (!tableName || !qry._id.$in) {
       return [];
     }
 
     return client.db(appId)
-      .collection(collectionName)
+      .collection(tableName)
       .find(qry)
       .toArray();
   }
@@ -259,7 +259,7 @@ class MongoAdapter extends BaseAdaptor {
    * @param {Object} details
    * @param {Object} details.client
    * @param {string} details.appId
-   * @param {string} details.collectionName
+   * @param {string} details.tableName
    * @param {Object} details.query
    * @param {Object} details.select
    * @param {Object} details.sort
@@ -271,7 +271,7 @@ class MongoAdapter extends BaseAdaptor {
   static find = async ({
     client,
     appId,
-    collectionName,
+    tableName,
     query,
     select,
     sort,
@@ -282,7 +282,7 @@ class MongoAdapter extends BaseAdaptor {
   }) => {
     const collection = client
       .db(appId)
-      .collection(collectionName);
+      .collection(tableName);
 
     let include = [];
     /* query for expires */
@@ -438,7 +438,7 @@ class MongoAdapter extends BaseAdaptor {
    * @param {Object} details
    * @param {Object} details.client
    * @param {string} details.appId
-   * @param {string} details.collectionName
+   * @param {string} details.tableName
    * @param {Object} details.query
    * @param {Object} details.select
    * @param {Object} details.sort
@@ -452,7 +452,7 @@ class MongoAdapter extends BaseAdaptor {
   static findOne = async ({
     client,
     appId,
-    collectionName,
+    tableName,
     query,
     select,
     sort,
@@ -463,7 +463,7 @@ class MongoAdapter extends BaseAdaptor {
     const documents = await MongoAdapter.find({
       client,
       appId,
-      collectionName,
+      tableName,
       query,
       select,
       sort,
@@ -491,7 +491,7 @@ class MongoAdapter extends BaseAdaptor {
       return MongoAdapter._save({
         client,
         appId,
-        collectionName: document._tableName,
+        tableName: document._tableName,
         document
       });
     });
@@ -504,31 +504,29 @@ class MongoAdapter extends BaseAdaptor {
    * @param {Object} details
    * @param {Object} details.client
    * @param {string} details.appId
-   * @param {string} details.collectionName
+   * @param {string} details.tableName
    * @param {Object} details.document
    *
    * @returns {Promise<Object>} document
    */
-  static _update = async ({ client, appId, collectionName, document }) => {
+  static _update = async ({ client, appId, tableName, document }) => {
     const collection = client
       .db(appId)
-      .collection(collectionName);
+      .collection(tableName);
 
-
-    const documentId = document._id;
-
-    const query = {};
-    query._id = documentId;
-
-    return collection.updateOne(
+    await collection.updateOne(
       {
-        _id: documentId,
+        _id: document._id,
       },
-      document,
+      {
+        $set: document
+      },
       {
         upsert: true,
       }
     );
+
+    return document;
   }
 
   /**
@@ -536,7 +534,7 @@ class MongoAdapter extends BaseAdaptor {
    * @param {Object} details
    * @param {Object} details.client
    * @param {string} details.appId
-   * @param {string} details.collectionName
+   * @param {string} details.tableName
    * @param {Object} details.query
    * @param {number} details.skip
    *
@@ -545,13 +543,13 @@ class MongoAdapter extends BaseAdaptor {
   static count = async ({
     client,
     appId,
-    collectionName,
+    tableName,
     query,
     skip
   }) => {
 
     const collection = client.db(appId)
-      .collection(collectionName);
+      .collection(tableName);
 
     // delete $include and $includeList recursively
     const cleanQuery = MongoAdapter._sanitizeQuery(query);
@@ -570,7 +568,7 @@ class MongoAdapter extends BaseAdaptor {
    * @param {Object} details
    * @param {Object} details.client
    * @param {string} details.appId
-   * @param {string} details.collectionName
+   * @param {string} details.tableName
    * @param {Array} details.onKey
    * @param {Object} details.query
    * @param {Object} details.select
@@ -582,7 +580,7 @@ class MongoAdapter extends BaseAdaptor {
   static distinct = async ({
     client,
     appId,
-    collectionName,
+    tableName,
     onKey,
     query,
     select,
@@ -591,7 +589,7 @@ class MongoAdapter extends BaseAdaptor {
     skip
   }) => {
     const collection = client.db(appId)
-      .collection(collectionName);
+      .collection(tableName);
 
     let include = [];
 
@@ -670,7 +668,7 @@ class MongoAdapter extends BaseAdaptor {
    * @param {Object} details
    * @param {Object} details.client
    * @param {string} details.appId
-   * @param {string} details.collectionName
+   * @param {string} details.tableName
    * @param {Array} details.pipeline
    * @param {number} details.limit
    * @param {number} details.skip
@@ -682,7 +680,7 @@ class MongoAdapter extends BaseAdaptor {
   static aggregate = async ({
     client,
     appId,
-    collectionName,
+    tableName,
     pipeline,
     limit,
     skip,
@@ -690,7 +688,7 @@ class MongoAdapter extends BaseAdaptor {
     isMasterKey
   }) => {
     const collection = client.db(appId)
-      .collection(collectionName);
+      .collection(tableName);
 
     let query = {};
     if (pipeline.length > 0 && pipeline[0] && pipeline[0].$match) {
@@ -766,7 +764,7 @@ class MongoAdapter extends BaseAdaptor {
    * @param {Object} details
    * @param {Object} details.client
    * @param {string} details.appId
-   * @param {string} details.collectionName
+   * @param {string} details.tableName
    * @param {Object} details.document
    *
    * @returns {Promise}
@@ -774,11 +772,11 @@ class MongoAdapter extends BaseAdaptor {
   static _insert = async ({
     client,
     appId,
-    collectionName,
+    tableName,
     document
   }) => {
     return client.db(appId)
-      .collection(collectionName)
+      .collection(tableName)
       .save(document);
   }
 
@@ -787,7 +785,7 @@ class MongoAdapter extends BaseAdaptor {
    * @param {Object} details
    * @param {Object} details.client
    * @param {string} details.appId
-   * @param {string} details.collectionName
+   * @param {string} details.tableName
    * @param {Object} details.document
    *
    * @returns {Promise}
@@ -795,7 +793,7 @@ class MongoAdapter extends BaseAdaptor {
   static delete = async ({
     client,
     appId,
-    collectionName,
+    tableName,
     document
   }) => {
     const documentId = document._id;
@@ -805,7 +803,7 @@ class MongoAdapter extends BaseAdaptor {
     }
 
     const collection = client.db(appId)
-      .collection(collectionName);
+      .collection(tableName);
 
     const query = {
       _id: documentId,
@@ -827,7 +825,7 @@ class MongoAdapter extends BaseAdaptor {
    * @param {Object} details
    * @param {Object} details.client
    * @param {string} details.appId
-   * @param {string} details.collectionName
+   * @param {string} details.tableName
    * @param {Object} details.query
    *
    * @returns {Promise<Object>} result
@@ -835,11 +833,11 @@ class MongoAdapter extends BaseAdaptor {
   static deleteByQuery = async ({
     client,
     appId,
-    collectionName,
+    tableName,
     query
   }) => {
     const collection = client.db(appId)
-      .collection(collectionName);
+      .collection(tableName);
 
     const doc = await collection.remove(query, {
       w: 1, // returns the number of documents removed
@@ -1000,12 +998,12 @@ class MongoAdapter extends BaseAdaptor {
    * @param {Object} details
    * @param {Object} details.client
    * @param {string} details.appId
-   * @param {string} details.collectionName
+   * @param {string} details.tableName
    * @param {string} details.document
    *
    * @returns {Promise<Object>} document
    */
-  static _save = async ({ client, appId, collectionName, document }) => {
+  static _save = async ({ client, appId, tableName, document }) => {
     const documentCopy = { ...document };
 
     if (documentCopy._isModified) {
@@ -1021,7 +1019,7 @@ class MongoAdapter extends BaseAdaptor {
     const updatedDocument = await MongoAdapter._update({
       client,
       appId,
-      collectionName,
+      tableName,
       document: serializedDocument
     });
 
@@ -1143,7 +1141,7 @@ class MongoAdapter extends BaseAdaptor {
    * @param {Object} details
    * @param {Object} details.client
    * @param {string} details.appId
-   * @param {string} details.collectionName
+   * @param {string} details.tableName
    * @param {string} details.indexString
    *
    * @returns {Promise<Object|undefined>}
@@ -1151,11 +1149,11 @@ class MongoAdapter extends BaseAdaptor {
   static _dropIndex = async ({
     client,
     appId,
-    collectionName,
+    tableName,
     indexString
   }) => {
     if (indexString && indexString !== '') {
-      const collection = client.db(appId).collection(collectionName);
+      const collection = client.db(appId).collection(tableName);
 
       return collection.dropIndex(indexString);
     }
@@ -1165,7 +1163,7 @@ class MongoAdapter extends BaseAdaptor {
    * @param {Object} details
    * @param {Object} details.client
    * @param {string} details.appId
-   * @param {string} details.collectionName
+   * @param {string} details.tableName
    * @param {Object} details.query
    *
    * @returns {Promise<Object|undefined>}
@@ -1173,11 +1171,11 @@ class MongoAdapter extends BaseAdaptor {
   static _unsetColumn = async ({
     client,
     appId,
-    collectionName,
+    tableName,
     query
   }) => {
     if (query && Object.keys(query).length > 0) {
-      const collection = client.db(appId).collection(collectionName);
+      const collection = client.db(appId).collection(tableName);
 
       return collection.update({}, {
         $unset: query,
@@ -1220,17 +1218,17 @@ class MongoAdapter extends BaseAdaptor {
    * @param {Object} details
    * @param {Object} details.client
    * @param {string} details.appId
-   * @param {string} details.collectionName
+   * @param {string} details.tableName
    * @param {Object} details.column
    *
    * @returns {Promise}
    */
-  static addColumn({ client, appId, collectionName, column }) {
+  static addColumn({ client, appId, tableName, column }) {
     if (column.dataType === 'GeoPoint' || column.dataType === 'Text') {
       return MongoAdapter.createIndex({
         client,
         appId,
-        collectionName,
+        tableName,
         columnName: column.name,
         columnType: column.dataType
       });
@@ -1242,18 +1240,18 @@ class MongoAdapter extends BaseAdaptor {
    * @param {Object} details
    * @param {Object} details.client
    * @param {string} details.appId
-   * @param {string} details.collectionName
+   * @param {string} details.tableName
    * @param {Array} details.schema
    *
    * @returns {Promise}
    */
-  static createCollection = async ({ client, appId, collectionName, schemas }) => {
+  static createCollection = async ({ client, appId, tableName, schemas }) => {
     for (let i = 0; i < schemas.length; i++) {
       if (schemas[i].dataType === 'GeoPoint') {
         await MongoAdapter.createIndex({
           client,
           appId,
-          collectionName,
+          tableName,
           columnName: schemas[i].name,
           columnType: schemas[i].dataType
         });
@@ -1265,7 +1263,7 @@ class MongoAdapter extends BaseAdaptor {
    * @param {Object} details
    * @param {Object} details.client
    * @param {string} details.appId
-   * @param {string} details.collectionName
+   * @param {string} details.tableName
    * @param {string} details.columnType
    *
    * @returns {Promise}
@@ -1273,7 +1271,7 @@ class MongoAdapter extends BaseAdaptor {
   static createIndex = async ({
     client,
     appId,
-    collectionName,
+    tableName,
     columnName,
     columnType
   }) => {
@@ -1289,7 +1287,7 @@ class MongoAdapter extends BaseAdaptor {
 
     if (Object.keys(obj).length > 0) {
       return client.db(appId)
-        .collection(collectionName)
+        .collection(tableName)
         .createIndex(obj);
     }
   }
@@ -1298,13 +1296,13 @@ class MongoAdapter extends BaseAdaptor {
    * @param {Object} details
    * @param {Object} details.client
    * @param {string} details.appId
-   * @param {string} details.collectionName
+   * @param {string} details.tableName
    *
    * @returns {Promise}
    */
-  static deleteAndCreateTextIndexes = async ({ client, appId, collectionName }) => {
+  static deleteAndCreateTextIndexes = async ({ client, appId, tableName }) => {
     return client.db(appId)
-      .collection(collectionName)
+      .collection(tableName)
       .createIndex({
         '$**': 'text',
       });
@@ -1314,13 +1312,13 @@ class MongoAdapter extends BaseAdaptor {
    * @param {Object} details
    * @param {Object} details.client
    * @param {string} details.appId
-   * @param {string} details.collectionName
+   * @param {string} details.tableName
    *
    * @returns {Promise}
    */
-  static getIndexes = async ({ client, appId, collectionName }) => {
+  static getIndexes = async ({ client, appId, tableName }) => {
     return client.db(appId)
-      .collection(collectionName)
+      .collection(tableName)
       .indexInformation();
   }
 
@@ -1329,7 +1327,7 @@ class MongoAdapter extends BaseAdaptor {
    * @param {Object} details
    * @param {Object} details.client
    * @param {string} details.appId
-   * @param {string} details.collectionName
+   * @param {string} details.tableName
    * @param {string} details.oldColumnName
    * @param {string} details.newColumnName
    *
@@ -1338,12 +1336,12 @@ class MongoAdapter extends BaseAdaptor {
   static renameColumn = async ({
     client,
     appId,
-    collectionName,
+    tableName,
     oldColumnName,
     newColumnName
   }) => {
     const collection = client.db(appId)
-      .collection(collectionName);
+      .collection(tableName);
 
     const query = {};
 
@@ -1364,7 +1362,7 @@ class MongoAdapter extends BaseAdaptor {
    * @param {Object} details
    * @param {Object} details.client
    * @param {string} details.appId
-   * @param {string} details.collectionName
+   * @param {string} details.tableName
    * @param {string} details.columnName
    * @param {string} details.columnType
    *
@@ -1373,7 +1371,7 @@ class MongoAdapter extends BaseAdaptor {
   static deleteColumn = async ({
     client,
     appId,
-    collectionName,
+    tableName,
     columnName,
     columnType
   }) => {
@@ -1387,21 +1385,21 @@ class MongoAdapter extends BaseAdaptor {
       indexName = `${columnName}_2dsphere`;
     }
 
-    await MongoAdapter._dropIndex({ client, appId, collectionName, indexName });
-    await MongoAdapter._unsetColumn({ client, appId, collectionName, query });
+    await MongoAdapter._dropIndex({ client, appId, tableName, indexName });
+    await MongoAdapter._unsetColumn({ client, appId, tableName, query });
   }
 
   /**
    * @param {Object} details
    * @param {Object} details.client
    * @param {string} details.appId
-   * @param {string} details.collectionName
+   * @param {string} details.tableName
    *
    * @returns {Promise}
    */
-  static deleteTable = async ({ client, appId, collectionName }) => {
+  static deleteTable = async ({ client, appId, tableName }) => {
     return client.db(appId)
-      .collection(collectionName)
+      .collection(tableName)
       .drop();
   }
 
@@ -1409,20 +1407,20 @@ class MongoAdapter extends BaseAdaptor {
    * @param {Object} details
    * @param {Object} details.client
    * @param {string} details.appId
-   * @param {string} details.oldCollectionName
-   * @param {string} details.newCollectionName
+   * @param {string} details.oldtableName
+   * @param {string} details.newtableName
    *
    * @returns {Promise}
    */
   static renameTable = async ({
     client,
     appId,
-    oldCollectionName,
-    newCollectionName
+    oldtableName,
+    newtableName
   }) => {
     return client.db(appId)
-      .collection(oldCollectionName)
-      .rename(newCollectionName);
+      .collection(oldtableName)
+      .rename(newtableName);
   }
 }
 
